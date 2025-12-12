@@ -78,7 +78,7 @@ data:
   # Global static (available now):
   static_zarr_path: /projects/prjs1858/static_hres.zarr
   static_variables: ["z", "lsm", "slt"]
-  use_static_features: false
+  use_static_features: true
   
   # Region filtering (optional) - set all 4 to enable, or set to null for full Europe
   # Full Europe (default):
@@ -141,6 +141,6 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: neural-field-superres
-      name: scandinavia-surface-2vars
+      name: scandinavia-surface-2vars-static
       save_dir: logs/
       log_model: false
