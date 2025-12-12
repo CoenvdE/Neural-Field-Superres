@@ -46,7 +46,10 @@ data:
   init_args:
     # Paths
     latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
-    hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
+    # Full dataset (use when HRES download is complete):
+    # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
+    # Current partial data (Jan-Jun 2018):
+    hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
     
     # Surface variables
     variables:
@@ -57,7 +60,8 @@ data:
     num_query_samples: null             # null = all points
     
     # Train/val split
-    val_months: 3
+    val_months: 1                       # Reduced for partial data
+    # val_months: 3                     # Use 3 months for full dataset
     
     # DataLoader
     batch_size: 4
@@ -66,7 +70,10 @@ data:
     normalize_coords: true
     
     # Auxiliary features (optional)
-    static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
+    # Europe-sliced static (create when needed):
+    # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
+    # Global static (available now):
+    static_zarr_path: /projects/prjs1858/static_hres.zarr
     static_variables: ["z", "lsm", "slt"]
     use_static_features: false
 
