@@ -212,7 +212,10 @@ def test_datamodule(data_dir: str, region_bounds: dict = None):
             num_workers=0,  # Single-threaded for testing
             normalize_coords=True,
             val_months=1,
-            region_bounds=region_bounds,
+            region_lat_min=region_bounds.get("lat_min") if region_bounds else None,
+            region_lat_max=region_bounds.get("lat_max") if region_bounds else None,
+            region_lon_min=region_bounds.get("lon_min") if region_bounds else None,
+            region_lon_max=region_bounds.get("lon_max") if region_bounds else None,
         )
         dm.setup("fit")
         
@@ -272,7 +275,10 @@ def test_model_forward(data_dir: str, region_bounds: dict = None):
             num_workers=0,
             normalize_coords=True,
             val_months=1,
-            region_bounds=region_bounds,
+            region_lat_min=region_bounds.get("lat_min") if region_bounds else None,
+            region_lat_max=region_bounds.get("lat_max") if region_bounds else None,
+            region_lon_min=region_bounds.get("lon_min") if region_bounds else None,
+            region_lon_max=region_bounds.get("lon_max") if region_bounds else None,
         )
         dm.setup("fit")
         
@@ -373,7 +379,10 @@ def test_visualization(data_dir: str, region_bounds: dict = None):
             num_workers=0,
             normalize_coords=True,
             val_months=1,
-            region_bounds=region_bounds,
+            region_lat_min=region_bounds.get("lat_min") if region_bounds else None,
+            region_lat_max=region_bounds.get("lat_max") if region_bounds else None,
+            region_lon_min=region_bounds.get("lon_min") if region_bounds else None,
+            region_lon_max=region_bounds.get("lon_max") if region_bounds else None,
         )
         dm.setup("fit")
         

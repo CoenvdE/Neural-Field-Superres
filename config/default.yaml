@@ -53,8 +53,9 @@ data:
     - "msl"                           # Mean sea level pressure
   
   # Query sampling - number of HRES points to sample per timestep
-  # Use 1000-5000 for training (memory efficient), null for full grid visualization
-  num_query_samples: null
+  # Use 1000-8192 for training (memory efficient), null for full grid visualization
+  # WARNING: null causes OOM on A100-40GB for large regions - use only for small test regions
+  num_query_samples: 4096
   
   # Train/val split
   val_months: 1                       # Reduced for partial data

@@ -113,6 +113,59 @@ class NeuralFieldSuperResModule(pl.LightningModule):
             query_auxiliary_features=query_auxiliary_features,
         )
     
+    @torch.no_grad()
+    def chunked_forward(
+        self,
+        query_pos: torch.Tensor,
+        latents: torch.Tensor,
+        latent_pos: torch.Tensor,
+        query_auxiliary_features: Optional[torch.Tensor] = None,
+        chunk_size: int = 8192,
+    ) -> torch.Tensor:
+        """
+        Memory-efficient forward pass that processes queries in chunks.
+        
+        Use this for inference on full grids (e.g., visualization) to avoid OOM.
+        The model processes `chunk_size` query points at a time and concatenates results.
+        
+        Args:
+            query_pos: [B, Q, coord_dim] query positions
+            latents: [B, Z, D] latent embeddings
+            latent_pos: [B, Z, coord_dim] latent positions
+            query_auxiliary_features: [B, Q, num_aux] optional auxiliary features
+            chunk_size: number of query points to process at once (default 8192)
+            
+        Returns:
+            predictions: [B, Q, num_output_features] concatenated predictions
+        """
+        B, Q, _ = query_pos.shape
+        device = query_pos.device
+        
+        # Process in chunks
+        predictions_list = []
+        for start_idx in range(0, Q, chunk_size):
+            end_idx = min(start_idx + chunk_size, Q)
+            
+            # Slice query positions
+            chunk_pos = query_pos[:, start_idx:end_idx, :]
+            
+            # Slice auxiliary features if present
+            chunk_aux = None
+            if query_auxiliary_features is not None:
+                chunk_aux = query_auxiliary_features[:, start_idx:end_idx, :]
+            
+            # Forward pass on chunk
+            chunk_pred = self.model(
+                query_pos=chunk_pos,
+                latents=latents,
+                latent_pos=latent_pos,
+                query_auxiliary_features=chunk_aux,
+            )
+            predictions_list.append(chunk_pred)
+        
+        # Concatenate all chunks
+        return torch.cat(predictions_list, dim=1)
+    
     def _shared_step(
         self, 
         batch: Dict[str, torch.Tensor], 

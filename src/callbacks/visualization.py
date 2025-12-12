@@ -78,17 +78,9 @@ class HRESVisualizationCallback(pl.Callback):
         trainer: pl.Trainer, 
         pl_module: pl.LightningModule
     ) -> None:
-        """Generate and log visualizations at end of validation epoch."""
+        """Generate and log full-grid visualizations at end of validation epoch."""
         # Check if we should log this epoch
         if (trainer.current_epoch + 1) % self.log_every_n_epochs != 0:
-            return
-        
-        # Check if we have validation outputs
-        if not hasattr(pl_module, "validation_step_outputs"):
-            return
-        
-        outputs = pl_module.validation_step_outputs
-        if len(outputs) == 0:
             return
         
         # Get WandB logger
@@ -96,52 +88,84 @@ class HRESVisualizationCallback(pl.Callback):
         if wandb_logger is None:
             return
         
-        # Get HRES grid info from datamodule
+        # Get datamodule for full-grid access
+        if trainer.datamodule is None:
+            return
+        
+        # Get HRES grid info
         hres_shape = self._get_hres_shape(trainer)
         geo_bounds = self._get_geo_bounds(trainer)
         
-        # Generate visualizations
+        if hres_shape is None:
+            return
+        
+        # Get the validation dataset for full-grid samples
+        val_dataset = trainer.datamodule.val_dataset
+        if val_dataset is None:
+            return
+        
+        # Store original num_query_samples and temporarily disable subsampling
+        original_num_query_samples = val_dataset.num_query_samples
+        val_dataset.num_query_samples = None  # Use full grid
+        
+        device = pl_module.device
         images = []
-        for i, output in enumerate(outputs[:self.num_samples]):
-            predictions = output["predictions"]  # [B, Q, num_vars]
-            targets = output["targets"]          # [B, Q, num_vars]
-            query_pos = output["query_pos"]      # [B, Q, coord_dim]
-            
-            # Take first sample from batch
-            pred = predictions[0, :, 0].numpy()  # [Q]
-            target = targets[0, :, 0].numpy()    # [Q]
-            
-            # Reshape to 2D grid if possible
-            if hres_shape is not None:
+        
+        try:
+            # Generate visualizations for a few samples
+            for sample_idx in range(min(self.num_samples, len(val_dataset))):
+                sample = val_dataset[sample_idx]
+                
+                # Move to device and add batch dimension
+                latents = sample['latents'].unsqueeze(0).to(device)          # [1, Z, D]
+                latent_pos = sample['latent_pos'].unsqueeze(0).to(device)    # [1, Z, 2]
+                query_pos = sample['query_pos'].unsqueeze(0).to(device)      # [1, Q, 2]
+                query_fields = sample['query_fields'].unsqueeze(0)            # [1, Q, V]
+                
+                # Optional auxiliary features
+                query_aux = None
+                if 'query_auxiliary_features' in sample:
+                    query_aux = sample['query_auxiliary_features'].unsqueeze(0).to(device)
+                
+                # Use chunked inference for full grid (memory-efficient)
+                with torch.amp.autocast(device_type=device.type if device.type != 'cpu' else 'cpu', 
+                                        enabled=device.type == 'cuda'):
+                    predictions = pl_module.chunked_forward(
+                        query_pos=query_pos,
+                        latents=latents,
+                        latent_pos=latent_pos,
+                        query_auxiliary_features=query_aux,
+                        chunk_size=8192,
+                    )
+                
+                # Move to CPU for visualization
+                pred = predictions[0, :, 0].cpu().numpy()    # [Q] - first variable
+                target = query_fields[0, :, 0].numpy()       # [Q]
+                
+                # Reshape to 2D grid
                 try:
                     pred_2d = pred.reshape(hres_shape)
                     target_2d = target.reshape(hres_shape)
                 except ValueError:
-                    # If reshape fails, skip visualization
                     continue
-            else:
-                # Try to infer square grid
-                n = len(pred)
-                side = int(np.sqrt(n))
-                if side * side == n:
-                    pred_2d = pred.reshape(side, side)
-                    target_2d = target.reshape(side, side)
-                else:
-                    continue
-            
-            # Create figure
-            fig = self._create_comparison_figure(
-                target_2d, 
-                pred_2d, 
-                geo_bounds=geo_bounds,
-                sample_idx=i,
-                epoch=trainer.current_epoch,
-            )
-            
-            # Convert to image
-            img = self._fig_to_image(fig)
-            images.append(img)
-            plt.close(fig)
+                
+                # Create figure
+                fig = self._create_comparison_figure(
+                    target_2d, 
+                    pred_2d, 
+                    geo_bounds=geo_bounds,
+                    sample_idx=sample_idx,
+                    epoch=trainer.current_epoch,
+                )
+                
+                # Convert to image
+                img = self._fig_to_image(fig)
+                images.append(img)
+                plt.close(fig)
+                
+        finally:
+            # Restore original setting
+            val_dataset.num_query_samples = original_num_query_samples
         
         # Log to WandB
         if images:
