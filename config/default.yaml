@@ -139,7 +139,6 @@ trainer:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
       project: neural-field-superres
-      name: europe-surface-2vars
+      name: scandinavia-surface-2vars
       save_dir: logs/
       log_model: false
-      tags: [europe, surface, 2t, msl]
