@@ -257,10 +257,10 @@ def test_model_forward(data_dir: str):
         latent_dim = sample['latents'].shape[-1]
         print(f"  Latent dimension: {latent_dim}")
         
-        # Create model (decoder-only, latent_dim is used internally as hidden_dim)
+        # Create model (decoder-only, hidden_dim should match latent_dim)
         model = NeuralFieldSuperResModule(
             num_output_features=2,          # 2t and msl
-            num_hidden_features=256,        # Internal hidden dimension
+            num_hidden_features=latent_dim, # Must match latent dimension (512)
             num_heads=8,
             coord_dim=2,
             num_decoder_layers=2,
@@ -275,9 +275,14 @@ def test_model_forward(data_dir: str):
         
         print(f"\n  Forward pass...")
         
-        # Forward
+        # Forward - unpack batch into explicit arguments
         with torch.amp.autocast(device_type=device.type, enabled=device.type == 'cuda'):
-            outputs = model(batch)
+            outputs = model(
+                query_pos=batch["query_pos"],
+                latents=batch["latents"],
+                latent_pos=batch["latent_pos"],
+                query_auxiliary_features=batch.get("query_auxiliary_features"),
+            )
             loss = model.training_step(batch, 0)
         
         print(f"  ✓ Forward pass successful!")
