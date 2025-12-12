@@ -213,3 +213,72 @@ class EraLatentHresDataset(Dataset):
             result['query_auxiliary_features'] = torch.from_numpy(aux_feats).float()
         
         return result
+
+
+def create_superres_dataloader(
+    latent_zarr_path: str,
+    hres_zarr_path: str,
+    variables: Optional[List[str]] = None,
+    batch_size: int = 4,
+    num_workers: int = 4,
+    **kwargs,
+) -> DataLoader:
+    """Create a single DataLoader for the super-resolution dataset."""
+    dataset = EraLatentHresDataset(
+        latent_zarr_path=latent_zarr_path,
+        hres_zarr_path=hres_zarr_path,
+        variables=variables,
+        **kwargs,
+    )
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+
+def create_train_val_dataloaders(
+    latent_zarr_path: str,
+    hres_zarr_path: str,
+    variables: Optional[List[str]] = None,
+    batch_size: int = 4,
+    num_workers: int = 4,
+    val_months: int = 3,
+    **kwargs,
+) -> Tuple[DataLoader, DataLoader]:
+    """Create train and validation DataLoaders."""
+    train_dataset = EraLatentHresDataset(
+        latent_zarr_path=latent_zarr_path,
+        hres_zarr_path=hres_zarr_path,
+        variables=variables,
+        split='train',
+        val_months=val_months,
+        **kwargs,
+    )
+    val_dataset = EraLatentHresDataset(
+        latent_zarr_path=latent_zarr_path,
+        hres_zarr_path=hres_zarr_path,
+        variables=variables,
+        split='val',
+        val_months=val_months,
+        **kwargs,
+    )
+    
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    
+    return train_loader, val_loader
