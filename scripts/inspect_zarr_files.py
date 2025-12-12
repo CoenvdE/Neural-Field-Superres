@@ -50,7 +50,10 @@ def inspect_zarr(zarr_path: Path, name: str = None):
         print(f"  {coord_name}:")
         print(f"    shape: {coord.shape}")
         print(f"    dtype: {coord.dtype}")
-        if len(values) > 0:
+        # Handle scalar coordinates (shape == ())
+        if coord.shape == ():
+            print(f"    value: {values}")
+        elif len(values) > 0:
             print(f"    range: [{values.min()}, {values.max()}]")
             if len(values) <= 10:
                 print(f"    values: {values}")
