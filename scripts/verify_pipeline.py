@@ -257,12 +257,10 @@ def test_model_forward(data_dir: str):
         latent_dim = sample['latents'].shape[-1]
         print(f"  Latent dimension: {latent_dim}")
         
-        # Create model
+        # Create model (decoder-only, latent_dim is used internally as hidden_dim)
         model = NeuralFieldSuperResModule(
-            num_output_features=2,
-            num_input_features=latent_dim,
-            num_query_features=2,
-            num_hidden_features=256,
+            num_output_features=2,          # 2t and msl
+            num_hidden_features=256,        # Internal hidden dimension
             num_heads=8,
             coord_dim=2,
             num_decoder_layers=2,
