@@ -183,7 +183,7 @@ def test_dataset_loading(data_dir: str, region_bounds: dict = None):
         return False
 
 
-def test_datamodule(data_dir: str):
+def test_datamodule(data_dir: str, region_bounds: dict = None):
     """Test the DataModule and DataLoader."""
     from pathlib import Path
     
@@ -199,6 +199,9 @@ def test_datamodule(data_dir: str):
     
     data_dir = Path(data_dir)
     
+    if region_bounds:
+        print(f"\n  Testing with region: {region_bounds}")
+    
     try:
         dm = NeuralFieldDataModule(
             latent_zarr_path=str(data_dir / "latents_europe_2018_2020.zarr"),
@@ -209,12 +212,15 @@ def test_datamodule(data_dir: str):
             num_workers=0,  # Single-threaded for testing
             normalize_coords=True,
             val_months=1,
+            region_bounds=region_bounds,
         )
         dm.setup("fit")
         
         print(f"  ✓ DataModule created")
         print(f"    Train samples: {len(dm.train_dataset)}")
         print(f"    Val samples: {len(dm.val_dataset)}")
+        print(f"    HRES shape: {dm.hres_shape}")
+        print(f"    Geo bounds: {dm.geo_bounds}")
         
         # Get a batch
         train_loader = dm.train_dataloader()
@@ -233,7 +239,7 @@ def test_datamodule(data_dir: str):
         return False
 
 
-def test_model_forward(data_dir: str):
+def test_model_forward(data_dir: str, region_bounds: dict = None):
     """Test a single forward pass through the model."""
     from pathlib import Path
     
@@ -252,6 +258,9 @@ def test_model_forward(data_dir: str):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  Device: {device}")
     
+    if region_bounds:
+        print(f"  Region: {region_bounds}")
+    
     try:
         # Create datamodule
         dm = NeuralFieldDataModule(
@@ -263,6 +272,7 @@ def test_model_forward(data_dir: str):
             num_workers=0,
             normalize_coords=True,
             val_months=1,
+            region_bounds=region_bounds,
         )
         dm.setup("fit")
         
@@ -270,6 +280,8 @@ def test_model_forward(data_dir: str):
         sample = dm.train_dataset[0]
         latent_dim = sample['latents'].shape[-1]
         print(f"  Latent dimension: {latent_dim}")
+        print(f"  Num latent tokens: {sample['latents'].shape[0]}")
+        print(f"  Num query points: {sample['query_pos'].shape[0]}")
         
         # Create model (decoder-only, hidden_dim should match latent_dim)
         model = NeuralFieldSuperResModule(
@@ -556,10 +568,10 @@ def main():
     check_time_alignment(args.data_dir)
     check_spatial_alignment(args.data_dir)
     test_dataset_loading(args.data_dir, region_bounds)
-    test_datamodule(args.data_dir)
+    test_datamodule(args.data_dir, region_bounds)
     
     if not args.quick:
-        test_model_forward(args.data_dir)
+        test_model_forward(args.data_dir, region_bounds)
     
     if args.viz:
         test_visualization(args.data_dir, region_bounds)
