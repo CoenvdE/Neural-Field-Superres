@@ -181,6 +181,8 @@ class EraLatentHresDataset(Dataset):
         """Load pre-computed statistics for target variable normalization."""
         self.target_mean = {}
         self.target_std = {}
+        self.static_mean = {}
+        self.static_std = {}
         
         if not self.normalize_targets:
             return
@@ -203,7 +205,7 @@ class EraLatentHresDataset(Dataset):
         with open(stats_path, 'r') as f:
             stats = json.load(f)
         
-        # Extract mean and std for each variable
+        # Extract mean and std for each target variable
         for var in self.variables:
             if var in stats:
                 self.target_mean[var] = float(stats[var]['mean'])
@@ -216,6 +218,38 @@ class EraLatentHresDataset(Dataset):
         print(f"Loaded target statistics from {stats_path}")
         for var in self.variables:
             print(f"  {var}: mean={self.target_mean[var]:.2f}, std={self.target_std[var]:.2f}")
+        
+        # Load statistics for static variables if using static features
+        if self.use_static_features:
+            # Try to load static statistics from same file or dedicated static file
+            static_stats_loaded = False
+            
+            # First, check if static variables are in the same stats file
+            for var in self.static_variables:
+                if var in stats:
+                    self.static_mean[var] = float(stats[var]['mean'])
+                    self.static_std[var] = float(stats[var]['std'])
+                    static_stats_loaded = True
+            
+            # If not found in main file, try dedicated static statistics file
+            if not static_stats_loaded and self.static_zarr_path:
+                static_path = Path(self.static_zarr_path)
+                static_stats_path = static_path.parent / f"{static_path.stem}_statistics.json"
+                
+                if static_stats_path.exists():
+                    with open(static_stats_path, 'r') as f:
+                        static_stats = json.load(f)
+                    
+                    for var in self.static_variables:
+                        if var in static_stats:
+                            self.static_mean[var] = float(static_stats[var]['mean'])
+                            self.static_std[var] = float(static_stats[var]['std'])
+                            static_stats_loaded = True
+            
+            if static_stats_loaded and self.static_mean:
+                print(f"Loaded static feature statistics:")
+                for var in self.static_mean.keys():
+                    print(f"  {var}: mean={self.static_mean[var]:.2f}, std={self.static_std[var]:.2f}")
     
     def _compute_bounds(self):
         """Compute lat/lon bounds for normalization based on latent grid coverage."""
@@ -247,7 +281,7 @@ class EraLatentHresDataset(Dataset):
         self.latent_positions = np.stack([lat_grid.flatten(), lon_grid.flatten()], axis=-1).astype(np.float32)
     
     def _load_static_features(self):
-        """Load optional static features."""
+        """Load optional static features and normalize them."""
         if not self.use_static_features or self.static_zarr_path is None:
             self.static_features = None
             return
@@ -255,15 +289,43 @@ class EraLatentHresDataset(Dataset):
         print(f"Loading static features from {self.static_zarr_path}...")
         static_ds = xr.open_zarr(self.static_zarr_path, consolidated=True)
         
-        available = [v for v in self.static_variables if v in static_ds.data_vars]
+        # Check both data_vars and coordinates for static variables
+        available = []
+        for v in self.static_variables:
+            if v in static_ds.data_vars or v in static_ds.coords:
+                available.append(v)
+        
         if not available:
-            print(f"  Warning: No static variables found")
+            print(f"  Warning: No static variables found in {list(static_ds.data_vars.keys())} or {list(static_ds.coords.keys())}")
             self.static_features = None
             return
         
-        features = [static_ds[v].values.flatten().astype(np.float32) for v in available]
+        # Load and optionally normalize each static variable
+        features = []
+        for var in available:
+            # Get data from either data_vars or coords
+            if var in static_ds.data_vars:
+                data = static_ds[var].values
+            else:
+                data = static_ds[var].values
+            
+            # Slice to match HRES region if needed
+            if len(data.shape) == 2:  # Spatial grid
+                data = data[np.ix_(self.hres_lat_indices, self.hres_lon_indices)]
+            
+            data = data.flatten().astype(np.float32)
+            
+            # Apply Z-score normalization if statistics available
+            if self.normalize_targets and var in self.static_mean:
+                data = (data - self.static_mean[var]) / self.static_std[var]
+                print(f"  {var}: normalized (mean={self.static_mean[var]:.2f}, std={self.static_std[var]:.2f})")
+            else:
+                print(f"  {var}: NOT normalized (no statistics found)")
+            
+            features.append(data)
+        
         self.static_features = np.stack(features, axis=-1)
-        print(f"  Loaded: {available}, shape={self.static_features.shape}")
+        print(f"  Loaded static features: {available}, shape={self.static_features.shape}")
     
     def _print_info(self):
         """Print dataset info."""

@@ -1,6 +1,7 @@
 # Neural Field Super-Resolution - Configuration
 # ==============================================
 # Surface-only model for 2 HRES variables (2t, msl).
+# lightning==2.5.5
 
 seed_everything: 13
 
@@ -67,6 +68,10 @@ data:
   pin_memory: true
   normalize_coords: true
   
+  # Target and static feature normalization
+  normalize_targets: true
+  statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json
+  
   # Target normalization
   normalize_targets: true
   statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json
@@ -109,7 +114,7 @@ trainer:
   check_val_every_n_epoch: 1
   
   callbacks:
-    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
         dirpath: checkpoints/
         filename: "epoch={epoch:03d}-val_loss={val/loss:.4f}"
@@ -119,14 +124,14 @@ trainer:
         save_last: true
         auto_insert_metric_name: false
     
-    - class_path: pytorch_lightning.callbacks.EarlyStopping
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
       init_args:
         monitor: val/loss
         patience: 20
         mode: min
         verbose: true
     
-    - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
       init_args:
         logging_interval: epoch
     
@@ -137,7 +142,7 @@ trainer:
         variable_name: "2t"
 
   logger:
-    class_path: pytorch_lightning.loggers.WandbLogger
+    class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: neural-field-superres
       name: scandinavia-surface-2vars
