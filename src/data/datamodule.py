@@ -42,8 +42,11 @@ class NeuralFieldDataModule(pl.LightningDataModule):
         static_variables: Optional[List[str]] = None,
         use_static_features: bool = False,
         
-        # Region filtering
-        region_bounds: Optional[Dict[str, float]] = None,
+        # Region filtering - individual floats for CLI compatibility
+        region_lat_min: Optional[float] = None,
+        region_lat_max: Optional[float] = None,
+        region_lon_min: Optional[float] = None,
+        region_lon_max: Optional[float] = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -60,7 +63,17 @@ class NeuralFieldDataModule(pl.LightningDataModule):
         self.static_zarr_path = static_zarr_path
         self.static_variables = static_variables
         self.use_static_features = use_static_features
-        self.region_bounds = region_bounds
+        
+        # Build region_bounds dict from individual params if any are set
+        if all(v is not None for v in [region_lat_min, region_lat_max, region_lon_min, region_lon_max]):
+            self.region_bounds = {
+                "lat_min": region_lat_min,
+                "lat_max": region_lat_max,
+                "lon_min": region_lon_min,
+                "lon_max": region_lon_max,
+            }
+        else:
+            self.region_bounds = None
         
         self.train_dataset = None
         self.val_dataset = None

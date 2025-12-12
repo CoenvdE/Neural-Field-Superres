@@ -78,30 +78,24 @@ data:
     static_variables: ["z", "lsm", "slt"]
     use_static_features: false
     
-    # Region filtering (optional)
-    # Set to null for full Europe coverage, or specify bounds for a sub-region
-    # region_bounds: null
+    # Region filtering (optional) - set all 4 to enable, or leave as null for full Europe
+    # Full Europe (default):
+    # region_lat_min: null
+    # region_lat_max: null
+    # region_lon_min: null
+    # region_lon_max: null
     
-    # # Alps region:
-    # region_bounds:
-    #   lat_min: 45.0
-    #   lat_max: 48.0
-    #   lon_min: 5.0
-    #   lon_max: 16.0
+    # Scandinavia region:
+    region_lat_min: 55.0
+    region_lat_max: 70.0
+    region_lon_min: 5.0
+    region_lon_max: 30.0
     
-    # Other example regions:
-    # Iberian Peninsula:
-    #   region_bounds:
-    #     lat_min: 36.0
-    #     lat_max: 44.0
-    #     lon_min: -10.0
-    #     lon_max: 4.0
-    # Scandinavia:
-    region_bounds:
-      lat_min: 55.0
-      lat_max: 70.0
-      lon_min: 5.0
-      lon_max: 30.0
+    # Alps region (commented):
+    # region_lat_min: 45.0
+    # region_lat_max: 48.0
+    # region_lon_min: 5.0
+    # region_lon_max: 16.0
 
 # Trainer configuration
 trainer:
