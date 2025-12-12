@@ -12,12 +12,6 @@
 # Neural Field Super-Resolution Training
 # Full Europe region (~30-70°N, -30-50°E)
 
-# ============================================================
-# Neural Field Super-Resolution Training Job
-# Region: Full Europe (~30-70°N, -30-50°E)
-# ============================================================
-
-# Create logs directory if it doesn't exist
 mkdir -p logs
 
 echo "============================================================"
@@ -42,26 +36,7 @@ cd /home/$USER/Neural-Field-Superres
 echo "Pulling latest code..."
 git pull
 
-# ============================================================
-# Step 1: Run verification + visualization BEFORE training
-# This shows initial (untrained) model predictions
-# ============================================================
-echo ""
-echo "============================================================"
-echo " Running pre-training visualization (untrained model)"
-echo "============================================================"
-# Skip verify_pipeline for full Europe (no region preset available)
-echo "Skipping verify_pipeline (no europe region preset)"
-
-# Move the visualization to a timestamped file
-if [ -f test_visualization.png ]; then
-    mv test_visualization.png logs/viz_pretrain_$(date +%Y%m%d_%H%M%S).png
-    echo "Pre-training visualization saved to logs/"
-fi
-
-# ============================================================
-# Step 2: Run training with full Europe config
-# ============================================================
+# Run training
 echo ""
 echo "============================================================"
 echo " Starting training (Full Europe)"

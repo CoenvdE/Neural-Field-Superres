@@ -2,7 +2,7 @@
 
 #SBATCH --partition=gpu_a100
 #SBATCH --gpus=1
-#SBATCH --job-name=TrainNeuralFieldSuperres
+#SBATCH --job-name=TrainNFSR-Scandinavia
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=9
 #SBATCH --time=24:00:00
@@ -10,16 +10,8 @@
 #SBATCH --error=cluster_workflow/slurm_outputs/train_scandinavia_%A.err
 
 # Neural Field Super-Resolution Training
-# Uses latents from aurora-highres and HRES data
-
-
-
-# ============================================================
-# Neural Field Super-Resolution Training Job
 # Region: Scandinavia (55-70°N, 5-30°E)
-# ============================================================
 
-# Create logs directory if it doesn't exist
 mkdir -p logs
 
 echo "============================================================"
@@ -44,31 +36,10 @@ cd /home/$USER/Neural-Field-Superres
 echo "Pulling latest code..."
 git pull
 
-# ============================================================
-# Step 1: Run verification + visualization BEFORE training
-# This shows initial (untrained) model predictions
-# ============================================================
+# Run training
 echo ""
 echo "============================================================"
-echo " Running pre-training visualization (untrained model)"
-echo "============================================================"
-python scripts/verify_pipeline.py \
-    --data-dir /projects/prjs1858 \
-    --region scandinavia \
-    --viz
-
-# Move the visualization to a timestamped file
-if [ -f test_visualization.png ]; then
-    mv test_visualization.png logs/viz_pretrain_$(date +%Y%m%d_%H%M%S).png
-    echo "Pre-training visualization saved to logs/"
-fi
-
-# ============================================================
-# Step 2: Run training
-# ============================================================
-echo ""
-echo "============================================================"
-echo " Starting training"
+echo " Starting training (Scandinavia)"
 echo "============================================================"
 python -m src.train fit --config config/default.yaml
 

@@ -252,7 +252,10 @@ class EraLatentHresDataset(Dataset):
                             self.static_std[var] = float(static_stats[var]['std'])
                             static_stats_loaded = True
                 elif static_stats_path:
-                    print(f"Warning: Static statistics file not found at {static_stats_path}")
+                    raise FileNotFoundError(
+                        f"Static statistics file not found at {static_stats_path}. "
+                        f"Please create this file with mean/std for {self.static_variables} or set use_static_features=false."
+                    )
             
             if static_stats_loaded and self.static_mean:
                 print(f"Loaded static feature statistics:")
