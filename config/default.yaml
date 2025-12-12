@@ -125,6 +125,12 @@ trainer:
     - class_path: pytorch_lightning.callbacks.LearningRateMonitor
       init_args:
         logging_interval: epoch
+    
+    - class_path: src.callbacks.visualization.HRESVisualizationCallback
+      init_args:
+        log_every_n_epochs: 5
+        num_samples: 4
+        variable_name: "2t"
 
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
