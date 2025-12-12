@@ -6,96 +6,92 @@ seed_everything: 13
 
 # Model configuration (decoder-only)
 model:
-  class_path: src.model.NeuralFieldSuperResModule
-  init_args:
-    # Architecture
-    num_output_features: 2              # 2t and msl
-    coord_dim: 2                        # 2D: lat, lon
-    num_hidden_features: 512
-    num_heads: 8
-    
-    # Processor
-    use_self_attention: false
-    num_processor_layers: 1
-    
-    # Decoder
-    decoder_type: knn_cross
-    num_decoder_layers: 2
-    
-    # Position encoding
-    use_rope: false
-    
-    # Auxiliary features (z, lsm, slt)
-    num_auxiliary_features: 0           # 0 = disabled, 3 = enabled
-    
-    # Optimizer
-    learning_rate: 1.0e-4
-    weight_decay: 0.01
-    
-    # Scheduler
-    use_scheduler: true
-    scheduler_t_max: null
-    scheduler_eta_min: 1.0e-6
-    
-    # Loss
-    loss_type: mse
+  # Architecture
+  num_output_features: 2              # 2t and msl
+  coord_dim: 2                        # 2D: lat, lon
+  num_hidden_features: 512
+  num_heads: 8
+  
+  # Processor
+  use_self_attention: false
+  num_processor_layers: 1
+  
+  # Decoder
+  decoder_type: knn_cross
+  num_decoder_layers: 2
+  
+  # Position encoding
+  use_rope: false
+  
+  # Auxiliary features (z, lsm, slt)
+  num_auxiliary_features: 0           # 0 = disabled, 3 = enabled
+  
+  # Optimizer
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  
+  # Scheduler
+  use_scheduler: true
+  scheduler_t_max: null
+  scheduler_eta_min: 1.0e-6
+  
+  # Loss
+  loss_type: mse
 
 # Data configuration
 data:
-  class_path: src.data.NeuralFieldDataModule
-  init_args:
-    # Paths
-    latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
-    # Full dataset (use when HRES download is complete):
-    # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
-    # Current partial data (Jan-Jun 2018):
-    hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
-    
-    # Surface variables
-    variables:
-      - "2t"                            # 2m temperature
-      - "msl"                           # Mean sea level pressure
-    
-    # Query sampling - number of HRES points to sample per timestep
-    # Use 1000-5000 for training (memory efficient), null for full grid visualization
-    num_query_samples: null
-    
-    # Train/val split
-    val_months: 1                       # Reduced for partial data
-    # val_months: 3                     # Use 3 months for full dataset
-    
-    # DataLoader
-    batch_size: 4
-    num_workers: 4
-    pin_memory: true
-    normalize_coords: true
-    
-    # Auxiliary features (optional)
-    # Europe-sliced static (create when needed):
-    # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
-    # Global static (available now):
-    static_zarr_path: /projects/prjs1858/static_hres.zarr
-    static_variables: ["z", "lsm", "slt"]
-    use_static_features: false
-    
-    # Region filtering (optional) - set all 4 to enable, or leave as null for full Europe
-    # Full Europe (default):
-    # region_lat_min: null
-    # region_lat_max: null
-    # region_lon_min: null
-    # region_lon_max: null
-    
-    # Scandinavia region:
-    region_lat_min: 55.0
-    region_lat_max: 70.0
-    region_lon_min: 5.0
-    region_lon_max: 30.0
-    
-    # Alps region (commented):
-    # region_lat_min: 45.0
-    # region_lat_max: 48.0
-    # region_lon_min: 5.0
-    # region_lon_max: 16.0
+  # Paths
+  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
+  # Full dataset (use when HRES download is complete):
+  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
+  # Current partial data (Jan-Jun 2018):
+  hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
+  
+  # Surface variables
+  variables:
+    - "2t"                            # 2m temperature
+    - "msl"                           # Mean sea level pressure
+  
+  # Query sampling - number of HRES points to sample per timestep
+  # Use 1000-5000 for training (memory efficient), null for full grid visualization
+  num_query_samples: null
+  
+  # Train/val split
+  val_months: 1                       # Reduced for partial data
+  # val_months: 3                     # Use 3 months for full dataset
+  
+  # DataLoader
+  batch_size: 4
+  num_workers: 4
+  pin_memory: true
+  normalize_coords: true
+  
+  # Auxiliary features (optional)
+  # Europe-sliced static (create when needed):
+  # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
+  # Global static (available now):
+  static_zarr_path: /projects/prjs1858/static_hres.zarr
+  static_variables: ["z", "lsm", "slt"]
+  use_static_features: false
+  
+  # Region filtering (optional) - set all 4 to enable, or set to null for full Europe
+  # Full Europe (default):
+  # region_lat_min: null
+  # region_lat_max: null
+  # region_lon_min: null
+  # region_lon_max: null
+  
+  # Scandinavia region:
+  region_lat_min: 55.0
+  region_lat_max: 70.0
+  region_lon_min: 5.0
+  region_lon_max: 30.0
+  
+  # Alps region (commented):
+  # region_lat_min: 45.0
+  # region_lat_max: 48.0
+  # region_lon_min: 5.0
+  # region_lon_max: 16.0
 
 # Trainer configuration
 trainer:
