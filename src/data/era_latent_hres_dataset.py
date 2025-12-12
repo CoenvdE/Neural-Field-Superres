@@ -177,9 +177,9 @@ class EraLatentHresDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         time_idx = self.time_indices[idx]
         
-        # Load latents
-        latent_var = list(self.latent_ds.data_vars)[0]
-        latent_data = self.latent_ds[latent_var].isel(time=time_idx).values
+        # Load latents - use surface_latents (not the first var which might be lat_bounds)
+        latent_data = self.latent_ds['surface_latents'].isel(time=time_idx).values
+        # Reshape from (lat, lon, channel) to (lat*lon, channel)
         latent_data = latent_data.reshape(-1, latent_data.shape[-1]).astype(np.float32)
         
         # Load HRES targets
