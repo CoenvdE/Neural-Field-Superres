@@ -445,23 +445,23 @@ def test_visualization(data_dir: str, region_bounds: dict = None):
                 # Compute extent for geographic coordinates [lon_min, lon_max, lat_min, lat_max]
                 extent = [geo['lon_min'], geo['lon_max'], geo['lat_min'], geo['lat_max']]
                 
-                # Create simple visualization with proper geographic extent
+                # Create visualization with individual min/max scaling
                 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
                 
-                vmin = min(target_2d.min(), pred_2d.min())
-                vmax = max(target_2d.max(), pred_2d.max())
                 err_max = max(abs(diff_2d.min()), abs(diff_2d.max()))
                 
+                # Ground truth with its own min/max
                 im0 = axes[0].imshow(target_2d, origin='upper', cmap='RdYlBu_r', 
-                                      vmin=vmin, vmax=vmax, extent=extent, aspect='auto')
-                axes[0].set_title("Ground Truth (2t)")
+                                      extent=extent, aspect='auto')
+                axes[0].set_title(f"Ground Truth (2t)\nRange: [{target_2d.min():.1f}, {target_2d.max():.1f}] K")
                 axes[0].set_xlabel("Longitude")
                 axes[0].set_ylabel("Latitude")
                 plt.colorbar(im0, ax=axes[0], label="K")
                 
+                # Prediction with its own min/max
                 im1 = axes[1].imshow(pred_2d, origin='upper', cmap='RdYlBu_r', 
-                                      vmin=vmin, vmax=vmax, extent=extent, aspect='auto')
-                axes[1].set_title("Prediction (2t) - UNTRAINED MODEL")
+                                      extent=extent, aspect='auto')
+                axes[1].set_title(f"Prediction (2t) - UNTRAINED\nRange: [{pred_2d.min():.1f}, {pred_2d.max():.1f}] K")
                 axes[1].set_xlabel("Longitude")
                 axes[1].set_ylabel("Latitude")
                 plt.colorbar(im1, ax=axes[1], label="K")
