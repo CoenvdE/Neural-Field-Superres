@@ -32,7 +32,7 @@ class NeuralFieldSuperResModule(pl.LightningModule):
         # Model architecture (decoder-only)
         num_output_features: int = 1,
         coord_dim: int = 2,
-        num_hidden_features: int = 256,
+        num_hidden_features: int = 512,
         num_heads: int = 8,
         
         # Processor options

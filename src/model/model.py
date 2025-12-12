@@ -102,7 +102,7 @@ class NeuralFieldSuperRes(nn.Module):
                         num_heads,
                         # coord_dim=coord_dim,
                         # coordinate_system=coordinate_system,
-                        use_rope=use_rope,
+                        # use_rope=use_rope,
                     )
                 )
             else:
