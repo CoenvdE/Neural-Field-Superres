@@ -1,91 +1,50 @@
-#!/usr/bin/env python
-"""
-Compute statistics (mean, std) for static HRES variables.
-
-Usage:
-    python scripts/compute_static_statistics.py \
-        --zarr-path /projects/prjs1858/static_hres.zarr \
-        --output /projects/prjs1858/static_hres_statistics.json \
-        --variables z lsm slt
-"""
-
-import argparse
+"""Compute statistics for static features and save to JSON."""
 import json
 import numpy as np
 import xarray as xr
-from pathlib import Path
+import argparse
 
-
-def compute_statistics(zarr_path: str, variables: list, output_path: str = None):
+def compute_statistics(zarr_path: str, output_path: str, variables: list):
     """Compute mean and std for static variables."""
-    print(f"Loading static data from: {zarr_path}")
+    print(f"Opening: {zarr_path}")
     ds = xr.open_zarr(zarr_path, consolidated=True)
     
-    print(f"Available variables: {list(ds.data_vars.keys())}")
-    print(f"Available coordinates: {list(ds.coords.keys())}")
-    
     stats = {}
+    print("\nStatic variable statistics:")
+    print("-" * 50)
     
     for var in variables:
-        # Check both data_vars and coords
         if var in ds.data_vars:
-            data = ds[var].values
-        elif var in ds.coords:
-            data = ds[var].values
+            data = ds[var].values.flatten()
+            # Remove NaN values
+            data = data[~np.isnan(data)]
+            
+            mean = float(np.mean(data))
+            std = float(np.std(data))
+            
+            stats[var] = {"mean": mean, "std": std}
+            print(f"{var:10s}: mean={mean:12.4f}, std={std:12.4f}")
         else:
-            print(f"  Warning: Variable '{var}' not found, skipping")
-            continue
-        
-        # Flatten and remove NaNs
-        data_flat = data.flatten()
-        data_valid = data_flat[~np.isnan(data_flat)]
-        
-        if len(data_valid) == 0:
-            print(f"  Warning: Variable '{var}' has no valid data, skipping")
-            continue
-        
-        mean = float(np.mean(data_valid))
-        std = float(np.std(data_valid))
-        
-        # Ensure std is not zero (would cause division issues)
-        if std < 1e-8:
-            print(f"  Warning: Variable '{var}' has near-zero std ({std}), using 1.0")
-            std = 1.0
-        
-        stats[var] = {
-            "mean": mean,
-            "std": std,
-            "min": float(np.min(data_valid)),
-            "max": float(np.max(data_valid)),
-            "count": int(len(data_valid)),
-        }
-        
-        print(f"  {var}: mean={mean:.4f}, std={std:.4f}, range=[{stats[var]['min']:.4f}, {stats[var]['max']:.4f}]")
+            print(f"{var:10s}: NOT FOUND in dataset")
     
-    # Determine output path
-    if output_path is None:
-        zarr_stem = Path(zarr_path).stem
-        output_path = Path(zarr_path).parent / f"{zarr_stem}_statistics.json"
+    print("-" * 50)
     
-    # Save statistics
+    # Save to JSON
     with open(output_path, 'w') as f:
         json.dump(stats, f, indent=2)
     
-    print(f"\nStatistics saved to: {output_path}")
+    print(f"\nSaved statistics to: {output_path}")
     return stats
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Compute statistics for static HRES variables")
-    parser.add_argument("--zarr-path", type=str, required=True, help="Path to static zarr store")
-    parser.add_argument("--output", type=str, default=None, help="Output JSON path (default: derived from zarr path)")
-    parser.add_argument("--variables", nargs="+", default=["z", "lsm", "slt"], help="Variables to compute stats for")
-    
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--zarr", default="/projects/prjs1858/static_hres_europe.zarr",
+                        help="Path to static zarr file")
+    parser.add_argument("--output", default="/projects/prjs1858/static_hres_statistics.json",
+                        help="Output JSON path")
+    parser.add_argument("--variables", nargs="+", default=["z", "lsm", "slt"],
+                        help="Variables to compute statistics for")
     args = parser.parse_args()
     
-    compute_statistics(args.zarr_path, args.variables, args.output)
-
-
-if __name__ == "__main__":
-    main()
-
+    compute_statistics(args.zarr, args.output, args.variables)
