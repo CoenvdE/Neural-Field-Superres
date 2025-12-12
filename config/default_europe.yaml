@@ -1,6 +1,7 @@
 # Neural Field Super-Resolution - Configuration
 # ==============================================
 # Surface-only model for 2 HRES variables (2t, msl).
+# Full Europe region (~30-70°N, -30-50°E)
 # lightning==2.5.5
 
 seed_everything: 13
@@ -25,7 +26,7 @@ model:
   use_rope: false
   
   # Auxiliary features (z, lsm, slt)
-  num_auxiliary_features: 3           # 0 = disabled, 3 = enabled
+  num_auxiliary_features: 0           # 0 = disabled, 3 = enabled
   
   # Optimizer
   learning_rate: 1.0e-4
@@ -78,26 +79,13 @@ data:
   # Global static (available now):
   static_zarr_path: /projects/prjs1858/static_hres.zarr
   static_variables: ["z", "lsm", "slt"]
-  use_static_features: true
+  use_static_features: false
   
-  # Region filtering (optional) - set all 4 to enable, or set to null for full Europe
-  # Full Europe (default):
-  # region_lat_min: null
-  # region_lat_max: null
-  # region_lon_min: null
-  # region_lon_max: null
-  
-  # Scandinavia region:
-  region_lat_min: 55.0
-  region_lat_max: 70.0
-  region_lon_min: 5.0
-  region_lon_max: 30.0
-  
-  # Alps region (commented):
-  # region_lat_min: 45.0
-  # region_lat_max: 48.0
-  # region_lon_min: 5.0
-  # region_lon_max: 16.0
+  # Region filtering - Full Europe (no filtering)
+  region_lat_min: null
+  region_lat_max: null
+  region_lon_min: null
+  region_lon_max: null
 
 # Trainer configuration
 trainer:
@@ -141,6 +129,7 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: neural-field-superres
-      name: scandinavia-surface-2vars-static
+      name: europe-surface-2vars
       save_dir: logs/
       log_model: false
+

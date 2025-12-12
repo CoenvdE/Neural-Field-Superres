@@ -16,7 +16,7 @@
 
 # ============================================================
 # Neural Field Super-Resolution Training Job
-# Region: Scandinavia (55-70°N, 5-30°E)
+# Region: Full Europe (~30-70°N, -30-50°E)
 # ============================================================
 
 # Create logs directory if it doesn't exist
@@ -54,7 +54,7 @@ echo " Running pre-training visualization (untrained model)"
 echo "============================================================"
 python scripts/verify_pipeline.py \
     --data-dir /projects/prjs1858 \
-    --region scandinavia \
+    --region europe \
     --viz
 
 # Move the visualization to a timestamped file

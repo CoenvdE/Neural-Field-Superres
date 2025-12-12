@@ -2,7 +2,7 @@
 
 #SBATCH --partition=gpu_a100
 #SBATCH --gpus=1
-#SBATCH --job-name=TrainNeuralFieldSuperres
+#SBATCH --job-name=TrainNFSR-Europe
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=9
 #SBATCH --time=24:00:00
@@ -10,44 +10,67 @@
 #SBATCH --error=cluster_workflow/slurm_outputs/train_europe_%A.err
 
 # Neural Field Super-Resolution Training
-# Uses latents from aurora-highres and HRES data
+# Full Europe region (~30-70°N, -30-50°E)
 
+# ============================================================
+# Neural Field Super-Resolution Training Job
+# Region: Full Europe (~30-70°N, -30-50°E)
+# ============================================================
+
+# Create logs directory if it doesn't exist
+mkdir -p logs
+
+echo "============================================================"
+echo " Job started: $(date)"
+echo " Node: $(hostname)"
+echo " GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo "============================================================"
+
+# Load modules
 module purge
 module load 2023
 module load CUDA/12.4.0
 module load Anaconda3/2023.07-2
 
-# Activate environment (adjust name if needed)
-source activate neural-field-superres
+# Activate conda environment
+source activate aurora-highres
 
-CODE_DIR="$HOME/Neural-Field-Superres"
-DATA_DIR="/projects/prjs1858"
+# Navigate to project directory
+cd /home/$USER/Neural-Field-Superres
 
-echo "=== NEURAL FIELD SUPER-RES TRAINING ==="
-echo "CODE_DIR: $CODE_DIR"
-echo "DATA_DIR: $DATA_DIR"
-echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
+# Pull latest code
+echo "Pulling latest code..."
+git pull
 
-cd $CODE_DIR
-export PYTHONPATH="."
-
-# Create output directories
-mkdir -p cluster_workflow/slurm_outputs
-mkdir -p checkpoints
-mkdir -p logs
-
-# Optional: Login to WandB (uncomment if using)
-# wandb login $WANDB_API_KEY
-
-# Step 1: Quick data inspection (verify files exist)
+# ============================================================
+# Step 1: Run verification + visualization BEFORE training
+# This shows initial (untrained) model predictions
+# ============================================================
 echo ""
-echo "=== Verifying data files ==="
-python scripts/inspect_zarr_files.py --data-dir $DATA_DIR
+echo "============================================================"
+echo " Running pre-training visualization (untrained model)"
+echo "============================================================"
+python scripts/verify_pipeline.py \
+    --data-dir /projects/prjs1858 \
+    --region europe \
+    --viz
 
-# Step 2: Run training
+# Move the visualization to a timestamped file
+if [ -f test_visualization.png ]; then
+    mv test_visualization.png logs/viz_pretrain_$(date +%Y%m%d_%H%M%S).png
+    echo "Pre-training visualization saved to logs/"
+fi
+
+# ============================================================
+# Step 2: Run training with full Europe config
+# ============================================================
 echo ""
-echo "=== Starting training ==="
-python -m src.train fit --config config/default.yaml
+echo "============================================================"
+echo " Starting training (Full Europe)"
+echo "============================================================"
+python -m src.train fit --config config/default_europe.yaml
 
 echo ""
-echo "=== TRAINING COMPLETE ==="
+echo "============================================================"
+echo " Job completed: $(date)"
+echo "============================================================"
