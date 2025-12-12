@@ -34,6 +34,7 @@ class EraLatentHresDataset(Dataset):
         val_months: Number of months at the end to use for validation
         static_zarr_path: Optional path to static features zarr
         use_static_features: Whether to load static features
+        region_bounds: Optional dict with lat_min, lat_max, lon_min, lon_max for sub-region filtering
     """
     
     def __init__(
@@ -48,6 +49,7 @@ class EraLatentHresDataset(Dataset):
         normalize_coords: bool = True,
         split: Optional[str] = None,
         val_months: int = 3,
+        region_bounds: Optional[Dict[str, float]] = None,
     ):
         super().__init__()
         
@@ -60,19 +62,24 @@ class EraLatentHresDataset(Dataset):
         self.static_zarr_path = static_zarr_path
         self.static_variables = static_variables or ['z', 'lsm', 'slt']
         self.use_static_features = use_static_features
+        self.region_bounds = region_bounds
         
         # Open Zarr stores
         self.latent_ds = xr.open_zarr(latent_zarr_path, consolidated=True)
         self.hres_ds = xr.open_zarr(hres_zarr_path, consolidated=True)
         
-        # Get coordinates (assume standard names)
-        self.latent_lat = self.latent_ds['lat'].values
-        self.latent_lon = self.latent_ds['lon'].values
+        # Get original coordinates
+        self._latent_lat_orig = self.latent_ds['lat'].values
+        self._latent_lon_orig = self.latent_ds['lon'].values
         self.latent_times = self.latent_ds['time'].values
         
-        self.hres_lat = self.hres_ds['latitude'].values
-        self.hres_lon = self.hres_ds['longitude'].values
+        self._hres_lat_orig = self.hres_ds['latitude'].values
+        self._hres_lon_orig = self.hres_ds['longitude'].values
         self.hres_times = self.hres_ds['time'].values
+        
+        # Apply grid clipping and region filtering
+        self._clip_hres_to_latent_bounds()
+        self._apply_region_bounds()
         
         # Setup time indices
         self._setup_time_indices()
@@ -83,7 +90,7 @@ class EraLatentHresDataset(Dataset):
         else:
             self.variables = variables
         
-        # Compute bounds for normalization
+        # Compute bounds for normalization (based on latent grid)
         self._compute_bounds()
         
         # Build position grids
@@ -94,6 +101,53 @@ class EraLatentHresDataset(Dataset):
         self._load_static_features()
         
         self._print_info()
+    
+    def _clip_hres_to_latent_bounds(self):
+        """Clip HRES grid to only include points within latent spatial coverage."""
+        lat_min, lat_max = self._latent_lat_orig.min(), self._latent_lat_orig.max()
+        lon_min, lon_max = self._latent_lon_orig.min(), self._latent_lon_orig.max()
+        
+        # Find HRES indices within latent bounds
+        hres_lat_mask = (self._hres_lat_orig >= lat_min) & (self._hres_lat_orig <= lat_max)
+        hres_lon_mask = (self._hres_lon_orig >= lon_min) & (self._hres_lon_orig <= lon_max)
+        
+        self.hres_lat_indices = np.where(hres_lat_mask)[0]
+        self.hres_lon_indices = np.where(hres_lon_mask)[0]
+        self.hres_lat = self._hres_lat_orig[hres_lat_mask]
+        self.hres_lon = self._hres_lon_orig[hres_lon_mask]
+        
+        # Latent uses full grid initially
+        self.latent_lat = self._latent_lat_orig.copy()
+        self.latent_lon = self._latent_lon_orig.copy()
+        self.latent_lat_indices = np.arange(len(self.latent_lat))
+        self.latent_lon_indices = np.arange(len(self.latent_lon))
+    
+    def _apply_region_bounds(self):
+        """Optionally filter both grids to a user-specified geographic sub-region."""
+        if self.region_bounds is None:
+            return
+        
+        lat_min = self.region_bounds.get("lat_min", -90)
+        lat_max = self.region_bounds.get("lat_max", 90)
+        lon_min = self.region_bounds.get("lon_min", -180)
+        lon_max = self.region_bounds.get("lon_max", 180)
+        
+        # Filter latent grid
+        latent_lat_mask = (self.latent_lat >= lat_min) & (self.latent_lat <= lat_max)
+        latent_lon_mask = (self.latent_lon >= lon_min) & (self.latent_lon <= lon_max)
+        self.latent_lat_indices = np.where(latent_lat_mask)[0]
+        self.latent_lon_indices = np.where(latent_lon_mask)[0]
+        self.latent_lat = self.latent_lat[latent_lat_mask]
+        self.latent_lon = self.latent_lon[latent_lon_mask]
+        
+        # Filter HRES grid
+        hres_lat_mask = (self.hres_lat >= lat_min) & (self.hres_lat <= lat_max)
+        hres_lon_mask = (self.hres_lon >= lon_min) & (self.hres_lon <= lon_max)
+        # Update indices relative to original arrays
+        self.hres_lat_indices = self.hres_lat_indices[hres_lat_mask]
+        self.hres_lon_indices = self.hres_lon_indices[hres_lon_mask]
+        self.hres_lat = self.hres_lat[hres_lat_mask]
+        self.hres_lon = self.hres_lon[hres_lon_mask]
     
     def _setup_time_indices(self):
         """Setup train/val time indices."""
@@ -115,11 +169,10 @@ class EraLatentHresDataset(Dataset):
                 self.split_info = f"val ({len(self.time_indices)} timesteps)"
     
     def _compute_bounds(self):
-        """Compute lat/lon bounds for normalization."""
-        all_lats = np.concatenate([self.latent_lat, self.hres_lat])
-        all_lons = np.concatenate([self.latent_lon, self.hres_lon])
-        self.lat_min, self.lat_max = all_lats.min(), all_lats.max()
-        self.lon_min, self.lon_max = all_lons.min(), all_lons.max()
+        """Compute lat/lon bounds for normalization based on latent grid coverage."""
+        # Use latent bounds as the base - HRES is already clipped to these
+        self.lat_min, self.lat_max = self.latent_lat.min(), self.latent_lat.max()
+        self.lon_min, self.lon_max = self.latent_lon.min(), self.latent_lon.max()
     
     def _normalize(self, arr: np.ndarray, vmin: float, vmax: float) -> np.ndarray:
         """Normalize to [-1, 1]."""
@@ -192,15 +245,23 @@ class EraLatentHresDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         time_idx = self.time_indices[idx]
         
-        # Load latents - use surface_latents (not the first var which might be lat_bounds)
-        latent_data = self.latent_ds['surface_latents'].isel(time=time_idx).values
+        # Load latents with region slicing
+        latent_data = self.latent_ds['surface_latents'].isel(
+            time=time_idx,
+            lat=self.latent_lat_indices,
+            lon=self.latent_lon_indices,
+        ).values
         # Reshape from (lat, lon, channel) to (lat*lon, channel)
         latent_data = latent_data.reshape(-1, latent_data.shape[-1]).astype(np.float32)
         
-        # Load HRES targets
+        # Load HRES targets with clipping/region slicing
         fields = []
         for var in self.variables:
-            data = self.hres_ds[var].isel(time=time_idx).values.flatten()
+            data = self.hres_ds[var].isel(
+                time=time_idx,
+                latitude=self.hres_lat_indices,
+                longitude=self.hres_lon_indices,
+            ).values.flatten()
             fields.append(data)
         query_fields = np.stack(fields, axis=-1).astype(np.float32)
         

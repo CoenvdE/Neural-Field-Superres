@@ -6,7 +6,7 @@ Surface-only: 2D (lat, lon) for surface variables (2t, msl).
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from .era_latent_hres_dataset import EraLatentHresDataset
 
@@ -41,6 +41,9 @@ class NeuralFieldDataModule(pl.LightningDataModule):
         static_zarr_path: Optional[str] = None,
         static_variables: Optional[List[str]] = None,
         use_static_features: bool = False,
+        
+        # Region filtering
+        region_bounds: Optional[Dict[str, float]] = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -57,6 +60,7 @@ class NeuralFieldDataModule(pl.LightningDataModule):
         self.static_zarr_path = static_zarr_path
         self.static_variables = static_variables
         self.use_static_features = use_static_features
+        self.region_bounds = region_bounds
         
         self.train_dataset = None
         self.val_dataset = None
@@ -75,6 +79,7 @@ class NeuralFieldDataModule(pl.LightningDataModule):
                 static_zarr_path=self.static_zarr_path,
                 static_variables=self.static_variables,
                 use_static_features=self.use_static_features,
+                region_bounds=self.region_bounds,
             )
             
             self.val_dataset = EraLatentHresDataset(
@@ -88,6 +93,7 @@ class NeuralFieldDataModule(pl.LightningDataModule):
                 static_zarr_path=self.static_zarr_path,
                 static_variables=self.static_variables,
                 use_static_features=self.use_static_features,
+                region_bounds=self.region_bounds,
             )
     
     def train_dataloader(self) -> DataLoader:

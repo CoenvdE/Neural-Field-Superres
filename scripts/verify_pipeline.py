@@ -119,7 +119,7 @@ def check_spatial_alignment(data_dir: str):
     print(f"    lon: {lon_factor:.1f}x")
 
 
-def test_dataset_loading(data_dir: str):
+def test_dataset_loading(data_dir: str, region_bounds: dict = None):
     """Test loading a sample from the dataset."""
     from pathlib import Path
     
@@ -135,6 +135,9 @@ def test_dataset_loading(data_dir: str):
     
     data_dir = Path(data_dir)
     
+    if region_bounds:
+        print(f"\n  Testing with region: {region_bounds}")
+    
     try:
         dataset = EraLatentHresDataset(
             latent_zarr_path=str(data_dir / "latents_europe_2018_2020.zarr"),
@@ -143,8 +146,19 @@ def test_dataset_loading(data_dir: str):
             num_query_samples=1000,  # Sample subset for speed
             normalize_coords=True,
             split=None,
+            region_bounds=region_bounds,
         )
         print(f"  ✓ Dataset created with {len(dataset)} samples")
+        
+        # Show clipped grid info
+        print(f"\n  Grid info (after clipping):")
+        print(f"    Latent grid: ({len(dataset.latent_lat)}, {len(dataset.latent_lon)})")
+        print(f"    HRES grid: ({len(dataset.hres_lat)}, {len(dataset.hres_lon)})")
+        
+        geo = dataset.geo_bounds
+        print(f"\n  Geographic bounds:")
+        print(f"    lat: [{geo['lat_min']:.2f}, {geo['lat_max']:.2f}]")
+        print(f"    lon: [{geo['lon_min']:.2f}, {geo['lon_max']:.2f}]")
         
         # Load one sample
         sample = dataset[0]
@@ -381,14 +395,33 @@ def test_visualization(data_dir: str):
         model = model.to(device)
         model.eval()
         
-        # Forward pass
-        with torch.no_grad():
-            predictions = model(
-                query_pos=batch["query_pos"],
-                latents=batch["latents"],
-                latent_pos=batch["latent_pos"],
-            )
+        # Forward pass in chunks to avoid OOM (full grid is 647K points!)
+        query_pos = batch["query_pos"]  # [1, Q, 2]
+        latents = batch["latents"]      # [1, Z, 512]
+        latent_pos = batch["latent_pos"]  # [1, Z, 2]
         
+        num_queries = query_pos.shape[1]
+        chunk_size = 10000  # Process 10K points at a time
+        predictions_list = []
+        
+        print(f"\n  Processing {num_queries} query points in chunks of {chunk_size}...")
+        
+        with torch.no_grad():
+            for start_idx in range(0, num_queries, chunk_size):
+                end_idx = min(start_idx + chunk_size, num_queries)
+                chunk_pos = query_pos[:, start_idx:end_idx, :]
+                
+                chunk_pred = model(
+                    query_pos=chunk_pos,
+                    latents=latents,
+                    latent_pos=latent_pos,
+                )
+                predictions_list.append(chunk_pred.cpu())
+                
+                if (start_idx // chunk_size) % 10 == 0:
+                    print(f"    Processed {end_idx}/{num_queries} points...")
+        
+        predictions = torch.cat(predictions_list, dim=1)
         print(f"\n  Predictions shape: {predictions.shape}")
         
         # Manual visualization test (mirroring callback logic)
@@ -472,12 +505,28 @@ def main():
         action="store_true",
         help="Also run visualization test (requires full grid loading)"
     )
+    parser.add_argument(
+        "--region",
+        type=str,
+        choices=["alps", "iberian", "scandinavia"],
+        help="Test with a specific sub-region"
+    )
     args = parser.parse_args()
+    
+    # Predefined regions
+    regions = {
+        "alps": {"lat_min": 45.0, "lat_max": 48.0, "lon_min": 5.0, "lon_max": 16.0},
+        "iberian": {"lat_min": 36.0, "lat_max": 44.0, "lon_min": -10.0, "lon_max": 4.0},
+        "scandinavia": {"lat_min": 55.0, "lat_max": 70.0, "lon_min": 5.0, "lon_max": 30.0},
+    }
+    region_bounds = regions.get(args.region) if args.region else None
     
     print("=" * 60)
     print(" Neural Field Super-Resolution Pipeline Verification")
     print("=" * 60)
     print(f"Data directory: {args.data_dir}")
+    if region_bounds:
+        print(f"Region: {args.region} {region_bounds}")
     
     # Run checks
     files = check_zarr_files(args.data_dir)
@@ -489,7 +538,7 @@ def main():
     
     check_time_alignment(args.data_dir)
     check_spatial_alignment(args.data_dir)
-    test_dataset_loading(args.data_dir)
+    test_dataset_loading(args.data_dir, region_bounds)
     test_datamodule(args.data_dir)
     
     if not args.quick:

@@ -76,6 +76,30 @@ data:
     static_zarr_path: /projects/prjs1858/static_hres.zarr
     static_variables: ["z", "lsm", "slt"]
     use_static_features: false
+    
+    # Region filtering (optional)
+    # Set to null for full Europe coverage, or specify bounds for a sub-region
+    region_bounds: null
+    
+    # Example regions:
+    # Alps:
+    #   region_bounds:
+    #     lat_min: 45.0
+    #     lat_max: 48.0
+    #     lon_min: 5.0
+    #     lon_max: 16.0
+    # Iberian Peninsula:
+    #   region_bounds:
+    #     lat_min: 36.0
+    #     lat_max: 44.0
+    #     lon_min: -10.0
+    #     lon_max: 4.0
+    # Scandinavia:
+    #   region_bounds:
+    #     lat_min: 55.0
+    #     lat_max: 70.0
+    #     lon_min: 5.0
+    #     lon_max: 30.0
 
 # Trainer configuration
 trainer:
