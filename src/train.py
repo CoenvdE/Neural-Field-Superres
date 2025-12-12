@@ -36,21 +36,9 @@ class NeuralFieldCLI(LightningCLI):
     
     def add_arguments_to_parser(self, parser):
         """Add custom arguments."""
-        parser.link_arguments(
-            "data.coord_dim", 
-            "model.init_args.coord_dim",
-            apply_on="parse"
-        )
-        parser.link_arguments(
-            "data.num_variables", 
-            "model.init_args.num_output_features",
-            apply_on="instantiate"
-        )
-        parser.link_arguments(
-            "data.num_variables", 
-            "model.init_args.num_query_features",
-            apply_on="instantiate"
-        )
+        # Note: num_output_features and coord_dim are set directly in config
+        # since they depend on the problem setup, not derived from data
+        pass
 
 
 def cli_main():
@@ -162,3 +150,5 @@ if __name__ == "__main__":
     
     # Uncomment for manual training:
     # manual_train()
+
+# python -m src.train fit --config config/default.yaml
