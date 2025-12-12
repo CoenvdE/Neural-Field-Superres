@@ -174,6 +174,21 @@ class EraLatentHresDataset(Dataset):
     def __len__(self) -> int:
         return len(self.time_indices)
     
+    @property
+    def hres_shape(self) -> Tuple[int, int]:
+        """Return HRES grid shape (lat, lon) for visualization."""
+        return (len(self.hres_lat), len(self.hres_lon))
+    
+    @property
+    def geo_bounds(self) -> Dict[str, float]:
+        """Return geographic bounds for visualization."""
+        return {
+            "lat_min": float(self.hres_lat.min()),
+            "lat_max": float(self.hres_lat.max()),
+            "lon_min": float(self.hres_lon.min()),
+            "lon_max": float(self.hres_lon.max()),
+        }
+    
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         time_idx = self.time_indices[idx]
         

@@ -107,3 +107,21 @@ class NeuralFieldDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
         )
+    
+    @property
+    def hres_shape(self) -> tuple:
+        """Get HRES grid shape (lat, lon) for visualization."""
+        if self.train_dataset is not None:
+            return self.train_dataset.hres_shape
+        elif self.val_dataset is not None:
+            return self.val_dataset.hres_shape
+        return None
+    
+    @property
+    def geo_bounds(self) -> dict:
+        """Get geographic bounds for visualization."""
+        if self.train_dataset is not None:
+            return self.train_dataset.geo_bounds
+        elif self.val_dataset is not None:
+            return self.val_dataset.geo_bounds
+        return None

@@ -312,6 +312,148 @@ def test_model_forward(data_dir: str):
         return False
 
 
+def test_visualization(data_dir: str):
+    """Test the visualization callback by generating a sample plot."""
+    from pathlib import Path
+    
+    print("\n" + "=" * 60)
+    print(" Step 7: Testing Visualization Callback")
+    print("=" * 60)
+    
+    try:
+        from src.model import NeuralFieldSuperResModule
+        from src.data import NeuralFieldDataModule
+        from src.callbacks.visualization import HRESVisualizationCallback
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except ImportError as e:
+        print(f"  ✗ Could not import: {e}")
+        return False
+    
+    data_dir = Path(data_dir)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    try:
+        # Create datamodule with FULL grid (no subsampling) for visualization
+        dm = NeuralFieldDataModule(
+            latent_zarr_path=str(data_dir / "latents_europe_2018_2020.zarr"),
+            hres_zarr_path=str(data_dir / "hres_europe_2018.zarr"),
+            variables=["2t", "msl"],
+            num_query_samples=None,  # None = use full grid
+            batch_size=1,
+            num_workers=0,
+            normalize_coords=True,
+            val_months=1,
+        )
+        dm.setup("fit")
+        
+        # Check if datamodule has the required attributes
+        print(f"  DataModule attributes:")
+        print(f"    has hres_shape: {hasattr(dm, 'hres_shape')}")
+        print(f"    has geo_bounds: {hasattr(dm, 'geo_bounds')}")
+        
+        if hasattr(dm, 'hres_shape'):
+            print(f"    hres_shape: {dm.hres_shape}")
+        if hasattr(dm, 'geo_bounds'):
+            print(f"    geo_bounds: {dm.geo_bounds}")
+        
+        # Get one batch
+        val_loader = dm.val_dataloader()
+        batch = next(iter(val_loader))
+        batch = {k: v.to(device) for k, v in batch.items()}
+        
+        print(f"\n  Batch shapes:")
+        for k, v in batch.items():
+            print(f"    {k}: {v.shape}")
+        
+        # Create model
+        sample = dm.train_dataset[0]
+        latent_dim = sample['latents'].shape[-1]
+        
+        model = NeuralFieldSuperResModule(
+            num_output_features=2,
+            num_hidden_features=latent_dim,
+            num_heads=8,
+            coord_dim=2,
+            num_decoder_layers=2,
+            learning_rate=1e-4,
+        )
+        model = model.to(device)
+        model.eval()
+        
+        # Forward pass
+        with torch.no_grad():
+            predictions = model(
+                query_pos=batch["query_pos"],
+                latents=batch["latents"],
+                latent_pos=batch["latent_pos"],
+            )
+        
+        print(f"\n  Predictions shape: {predictions.shape}")
+        
+        # Manual visualization test (mirroring callback logic)
+        pred = predictions[0, :, 0].cpu().numpy()  # First variable (2t)
+        target = batch["query_fields"][0, :, 0].cpu().numpy()
+        
+        # Try to get HRES shape for reshaping
+        if hasattr(dm, 'hres_shape') and dm.hres_shape is not None:
+            hres_shape = dm.hres_shape
+            print(f"\n  Attempting to reshape to {hres_shape}...")
+            try:
+                pred_2d = pred.reshape(hres_shape)
+                target_2d = target.reshape(hres_shape)
+                diff_2d = pred_2d - target_2d
+                
+                # Create simple visualization
+                fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+                
+                vmin = min(target_2d.min(), pred_2d.min())
+                vmax = max(target_2d.max(), pred_2d.max())
+                err_max = max(abs(diff_2d.min()), abs(diff_2d.max()))
+                
+                im0 = axes[0].imshow(target_2d, origin='upper', cmap='RdYlBu_r', vmin=vmin, vmax=vmax)
+                axes[0].set_title("Ground Truth (2t)")
+                plt.colorbar(im0, ax=axes[0])
+                
+                im1 = axes[1].imshow(pred_2d, origin='upper', cmap='RdYlBu_r', vmin=vmin, vmax=vmax)
+                axes[1].set_title("Prediction (2t)")
+                plt.colorbar(im1, ax=axes[1])
+                
+                im2 = axes[2].imshow(diff_2d, origin='upper', cmap='RdBu_r', vmin=-err_max, vmax=err_max)
+                axes[2].set_title("Error (Pred - GT)")
+                plt.colorbar(im2, ax=axes[2])
+                
+                rmse = np.sqrt(np.mean(diff_2d ** 2))
+                mae = np.mean(np.abs(diff_2d))
+                fig.suptitle(f"RMSE: {rmse:.4f} | MAE: {mae:.4f}")
+                
+                plt.tight_layout()
+                
+                # Save to file
+                output_path = Path("test_visualization.png")
+                fig.savefig(output_path, dpi=100, bbox_inches='tight')
+                plt.close(fig)
+                
+                print(f"  ✓ Visualization saved to: {output_path.absolute()}")
+                
+            except ValueError as e:
+                print(f"  ⚠ Could not reshape to 2D grid: {e}")
+                print(f"    Query points: {len(pred)}, HRES shape: {hres_shape}")
+                print(f"    Expected: {hres_shape[0] * hres_shape[1]} points")
+        else:
+            print("  ⚠ DataModule doesn't have hres_shape attribute")
+            print("    Visualization callback won't work without it.")
+            print("    Consider adding hres_shape and geo_bounds to NeuralFieldDataModule")
+        
+        return True
+        
+    except Exception as e:
+        print(f"  ✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Verify Neural Field Super-Resolution pipeline")
     parser.add_argument(
@@ -324,6 +466,11 @@ def main():
         "--quick",
         action="store_true",
         help="Run only quick checks (skip model forward pass)"
+    )
+    parser.add_argument(
+        "--viz",
+        action="store_true",
+        help="Also run visualization test (requires full grid loading)"
     )
     args = parser.parse_args()
     
@@ -347,6 +494,9 @@ def main():
     
     if not args.quick:
         test_model_forward(args.data_dir)
+    
+    if args.viz:
+        test_visualization(args.data_dir)
     
     print("\n" + "=" * 60)
     print(" Verification Complete!")
