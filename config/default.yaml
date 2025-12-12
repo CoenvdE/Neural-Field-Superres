@@ -31,12 +31,12 @@ model:
   learning_rate: 1.0e-4
   weight_decay: 0.01
   
-  # Scheduler
+  # Learning rate scheduler
   use_scheduler: true
-  scheduler_t_max: null
+  scheduler_t_max: null               # null = use trainer.max_epochs
   scheduler_eta_min: 1.0e-6
   
-  # Loss
+  # Loss function
   loss_type: mse
 
 # Data configuration
@@ -69,10 +69,6 @@ data:
   normalize_coords: true
   
   # Target and static feature normalization
-  normalize_targets: true
-  statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json
-  
-  # Target normalization
   normalize_targets: true
   statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json
   

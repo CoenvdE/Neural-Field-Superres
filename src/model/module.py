@@ -263,16 +263,16 @@ class NeuralFieldSuperResModule(L.LightningModule):
         
         config = {"optimizer": optimizer}
         
-        if self.hparams.use_scheduler:
+        if self.hparams.get('use_scheduler', False):
             # Use trainer's max_epochs if not specified
-            t_max = self.hparams.scheduler_t_max
+            t_max = self.hparams.get('scheduler_t_max', None)
             if t_max is None:
                 t_max = self.trainer.max_epochs if self.trainer else 100
             
             scheduler = CosineAnnealingLR(
                 optimizer,
                 T_max=t_max,
-                eta_min=self.hparams.scheduler_eta_min,
+                eta_min=self.hparams.get('scheduler_eta_min', 1e-6),
             )
             
             config["lr_scheduler"] = {
