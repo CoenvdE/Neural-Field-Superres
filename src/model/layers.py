@@ -18,7 +18,7 @@ class CrossAttention(nn.Module):
         embed_dim: int,
         num_heads: int,
         *,
-        coord_dim: int,
+        coord_dim: int = 2,  # Default to 2D (lat/lon)
         coordinate_system: str = "cartesian",
         k_nearest: int = 16,
         dropout: float = 0.0,
@@ -42,8 +42,6 @@ class CrossAttention(nn.Module):
                 coord_dim=coord_dim,
                 embed_dim=embed_dim,
                 coordinate_system=coordinate_system,
-                hidden_dim=pos_hidden_dim, #TODO: needed?
-                num_layers=pos_mlp_layers, #TODO: needed?
                 learnable_coefficients=pos_learnable_coefficients,
                 init_std=pos_init_std,
             )
@@ -76,9 +74,12 @@ class CrossAttention(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Project query tokens onto the k nearest context tokens."""
 
+        # Add position encoding to query and context features
         if self.positional_information_type == "rff":
-            query = self.pos_encoder(query_pos)
-            context = self.pos_encoder(context_pos)
+            query_pos_enc = self.pos_encoder(query_pos)
+            context_pos_enc = self.pos_encoder(context_pos)
+            query = query + query_pos_enc
+            context = context + context_pos_enc
         elif self.positional_information_type == "rope":
             # query_cos, query_sin = self.pos_encoder(query_pos)
             # context_cos, context_sin = self.pos_encoder(context_pos)
@@ -88,7 +89,7 @@ class CrossAttention(nn.Module):
         elif self.positional_information_type == "bi-invariant":
             raise NotImplementedError
         elif self.positional_information_type == "none":
-            raise NotImplementedError
+            pass  # No positional encoding
 
         batch_size, num_query, _ = query.shape
         _, num_context, _ = context.shape

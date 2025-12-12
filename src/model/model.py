@@ -3,6 +3,7 @@ import torch.nn as nn
 from typing import Optional
 
 from .layers import CrossAttention
+from .pos_emb import CoordinateEncoder
 
 
 class NeuralFieldSuperRes(nn.Module):
@@ -66,10 +67,22 @@ class NeuralFieldSuperRes(nn.Module):
         # self.input_proj = nn.Linear(
         #     num_input_features, num_hidden_features) if num_input_features != num_hidden_features else nn.Identity()
 
-        # Query projection: projects [query_pos, aux_features] to hidden dim
-        # Input dim = coord_dim + num_auxiliary_features
-        query_input_dim = coord_dim + num_auxiliary_features
-        self.query_proj = nn.Linear(query_input_dim, num_hidden_features)
+        # Query position encoder: encode query positions to hidden_dim (512)
+        self.query_pos_encoder = CoordinateEncoder(
+            coord_dim=coord_dim,
+            embed_dim=num_hidden_features,
+            coordinate_system='cartesian',
+        )
+        
+        # If auxiliary features exist, project [pos_encoding + aux_features] to hidden_dim
+        if num_auxiliary_features > 0:
+            # Input is pos_encoding (hidden_dim) + aux_features (num_aux)
+            self.query_proj = nn.Linear(
+                num_hidden_features + num_auxiliary_features, 
+                num_hidden_features
+            )
+        else:
+            self.query_proj = None  # No projection needed
 
         # Encoder (commented out)
         # if use_encoder:
@@ -100,7 +113,7 @@ class NeuralFieldSuperRes(nn.Module):
                     CrossAttention(
                         num_hidden_features,
                         num_heads,
-                        # coord_dim=coord_dim,
+                        coord_dim=coord_dim,
                         # coordinate_system=coordinate_system,
                         # use_rope=use_rope,
                     )
@@ -173,14 +186,17 @@ class NeuralFieldSuperRes(nn.Module):
         if self.use_self_attention:
             latents, latent_pos = self.processor(latents, latent_pos)
 
-        # Build query input: [query_pos] or [query_pos, auxiliary_features]
-        if query_auxiliary_features is not None:
-            query_input = torch.cat([query_pos, query_auxiliary_features], dim=-1)
-        else:
-            query_input = query_pos
+        # Build query input: encode position to hidden_dim, then concatenate with auxiliary features
+        # Step 1: Encode query positions to hidden_dim (512)
+        query_pos_encoded = self.query_pos_encoder(query_pos)  # [B, Q, hidden_dim]
         
-        # Project to hidden dimension
-        query_hidden = self.query_proj(query_input)
+        # Step 2: Concatenate with auxiliary features if present
+        if query_auxiliary_features is not None:
+            query_input = torch.cat([query_pos_encoded, query_auxiliary_features], dim=-1)
+            # Step 3: Project [pos_encoding + aux] back to hidden_dim
+            query_hidden = self.query_proj(query_input)
+        else:
+            query_hidden = query_pos_encoded
         
         # Decoder: cross-attention from query positions to latents
         for layer in self.decoder_layers:
