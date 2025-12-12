@@ -20,9 +20,8 @@ class CoordinateEncoder(nn.Module):
         self.coord_dim = coord_dim
         self.coordinate_system = coordinate_system
 
-        self.input_dim = self._infer_input_dim(coord_dim, coordinate_system)
         self.encoder = RFFNet(
-            in_dim=self.input_dim,
+            in_dim=self.coord_dim,
             output_dim=embed_dim,
             hidden_dim=embed_dim, #TODO: needed and expansion?
             learnable_coefficients=learnable_coefficients,
@@ -38,36 +37,28 @@ class CoordinateEncoder(nn.Module):
             return coords
 
         if self.coordinate_system == "latlon":
-            if self.coord_dim != 2:
-                raise ValueError("latlon coordinates require at least 2 dims") #TODO: at least 2? exactly 2 right?
-            lat = coords[..., 0].clamp(-1.0, 1.0) * (math.pi / 2)
-            lon = coords[..., 1].clamp(-1.0, 1.0) * math.pi
-            lat_features = torch.stack(
-                (torch.sin(lat), torch.cos(lat)), dim=-1)
-            lon_features = torch.stack(
-                (torch.sin(lon), torch.cos(lon)), dim=-1)
-            return torch.cat((lat_features, lon_features), dim=-1)
+            # if self.coord_dim != 2:
+            #     raise ValueError("latlon coordinates require at least 2 dims") #TODO: at least 2? exactly 2 right?
+            # lat = coords[..., 0].clamp(-1.0, 1.0) * (math.pi / 2)
+            # lon = coords[..., 1].clamp(-1.0, 1.0) * math.pi
+            # lat_features = torch.stack(
+            #     (torch.sin(lat), torch.cos(lat)), dim=-1)
+            # lon_features = torch.stack(
+            #     (torch.sin(lon), torch.cos(lon)), dim=-1)
+            # return torch.cat((lat_features, lon_features), dim=-1)
+            raise NotImplementedError
 
         if self.coordinate_system == "polar": #TODO: polar for 3d
-            if self.coord_dim != 3:
-                raise ValueError("polar coordinates require at least 2 dims") #TODO: at least 2? exactly 3 right?
-            radius = coords[..., 0]
-            angle = coords[..., 1] * math.pi
-            x = radius * torch.cos(angle)
-            y = radius * torch.sin(angle)
-            return torch.stack((x, y, angle), dim=-1)
+            # if self.coord_dim != 3:
+            #     raise ValueError("polar coordinates require at least 2 dims") #TODO: at least 2? exactly 3 right?
+            # radius = coords[..., 0]
+            # angle = coords[..., 1] * math.pi
+            # x = radius * torch.cos(angle)
+            # y = radius * torch.sin(angle)
+            # return torch.stack((x, y, angle), dim=-1)
+            raise NotImplementedError
 
         return coords
-
-    def _infer_input_dim(self, coord_dim: int, coordinate_system: str) -> int:
-        #TODO: check this later
-        if coordinate_system == "cartesian":
-            return coord_dim
-        if coordinate_system == "latlon":
-            return 4
-        if coordinate_system == "polar": #TODO: polar for 3d beed nire duns>
-            return 3
-        return coord_dim
 
 class RFFNet(nn.Module):
     """RFF-based embedding network: encoding + MLP + final linear."""

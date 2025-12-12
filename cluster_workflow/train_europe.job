@@ -1,0 +1,53 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --job-name=TrainNeuralFieldSuperres
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=9
+#SBATCH --time=24:00:00
+#SBATCH --output=cluster_workflow/slurm_outputs/train_europe_%A.out
+#SBATCH --error=cluster_workflow/slurm_outputs/train_europe_%A.err
+
+# Neural Field Super-Resolution Training
+# Uses latents from aurora-highres and HRES data
+
+module purge
+module load 2023
+module load CUDA/12.4.0
+module load Anaconda3/2023.07-2
+
+# Activate environment (adjust name if needed)
+source activate neural-field-superres
+
+CODE_DIR="$HOME/Neural-Field-Superres"
+DATA_DIR="/projects/prjs1858"
+
+echo "=== NEURAL FIELD SUPER-RES TRAINING ==="
+echo "CODE_DIR: $CODE_DIR"
+echo "DATA_DIR: $DATA_DIR"
+echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
+
+cd $CODE_DIR
+export PYTHONPATH="."
+
+# Create output directories
+mkdir -p cluster_workflow/slurm_outputs
+mkdir -p checkpoints
+mkdir -p logs
+
+# Optional: Login to WandB (uncomment if using)
+# wandb login $WANDB_API_KEY
+
+# Step 1: Quick data inspection (verify files exist)
+echo ""
+echo "=== Verifying data files ==="
+python scripts/inspect_zarr_files.py --data-dir $DATA_DIR
+
+# Step 2: Run training
+echo ""
+echo "=== Starting training ==="
+python -m src.train fit --config config/default.yaml
+
+echo ""
+echo "=== TRAINING COMPLETE ==="

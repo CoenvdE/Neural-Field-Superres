@@ -1,0 +1,206 @@
+"""
+Inspect Zarr files from aurora-highres cluster workflow.
+
+Opens all zarr files in a folder and prints their dimensions,
+coordinates, and variables.
+
+Usage:
+    python scripts/inspect_zarr_files.py --data-dir /path/to/data
+    python scripts/inspect_zarr_files.py --data-dir /projects/prjs1858
+"""
+
+import argparse
+from pathlib import Path
+import xarray as xr
+
+
+# Europe bounds used in the pipeline
+EUROPE_BOUNDS = {
+    "lat": (30.0, 70.0),
+    "lon": (-30.0, 50.0),
+}
+
+
+def print_section(title: str):
+    """Print a section header."""
+    print(f"\n{'=' * 60}")
+    print(f" {title}")
+    print('=' * 60)
+
+
+def inspect_zarr(zarr_path: Path, name: str = None):
+    """Open a zarr file and print its dimensions and info."""
+    if not zarr_path.exists():
+        print(f"  [NOT FOUND] {zarr_path}")
+        return None
+    
+    try:
+        ds = xr.open_zarr(zarr_path, consolidated=True)
+    except Exception as e:
+        print(f"  [ERROR] Could not open {zarr_path}: {e}")
+        return None
+    
+    display_name = name or zarr_path.name
+    print_section(display_name)
+    print(f"Path: {zarr_path}")
+    
+    print("\n--- Coordinates ---")
+    for coord_name, coord in ds.coords.items():
+        values = coord.values
+        print(f"  {coord_name}:")
+        print(f"    shape: {coord.shape}")
+        print(f"    dtype: {coord.dtype}")
+        if len(values) > 0:
+            print(f"    range: [{values.min()}, {values.max()}]")
+            if len(values) <= 10:
+                print(f"    values: {values}")
+            else:
+                print(f"    first 3: {values[:3]}")
+                print(f"    last 3: {values[-3:]}")
+    
+    print("\n--- Dimensions ---")
+    for dim_name, size in ds.dims.items():
+        print(f"  {dim_name}: {size}")
+    
+    print("\n--- Data Variables ---")
+    for var_name, var in ds.data_vars.items():
+        print(f"  {var_name}:")
+        print(f"    dims: {var.dims}")
+        print(f"    shape: {var.shape}")
+        print(f"    dtype: {var.dtype}")
+    
+    return ds
+
+
+def slice_static_to_europe(ds: xr.Dataset, bounds: dict) -> xr.Dataset:
+    """Slice a global static dataset to the Europe region."""
+    lat_min, lat_max = bounds["lat"]
+    lon_min, lon_max = bounds["lon"]
+    
+    # Detect lat/lon coord names
+    lat_name = None
+    lon_name = None
+    for name in ds.coords:
+        if name.lower() in ['lat', 'latitude']:
+            lat_name = name
+        if name.lower() in ['lon', 'longitude']:
+            lon_name = name
+    
+    if lat_name is None or lon_name is None:
+        print("  [WARNING] Could not detect lat/lon coords for slicing")
+        return ds
+    
+    lat_vals = ds[lat_name].values
+    lon_vals = ds[lon_name].values
+    
+    # Check if lat is descending (common in GRIB data)
+    lat_descending = lat_vals[0] > lat_vals[-1] if len(lat_vals) > 1 else False
+    
+    # Handle lon in 0-360 vs -180-180 format
+    # If lon range is 0-360, convert bounds
+    if lon_vals.min() >= 0 and lon_vals.max() > 180:
+        # Data is in 0-360 format
+        print(f"  Detected lon in 0-360 format")
+        if lon_min < 0:
+            # Convert negative lon to 0-360
+            lon_min_360 = lon_min + 360
+            lon_max_360 = lon_max
+            # Need to do two slices and concat
+            print(f"  Slicing lon: [{lon_min_360}, 360] and [0, {lon_max_360}]")
+        else:
+            lon_min_360 = lon_min
+            lon_max_360 = lon_max
+    else:
+        lon_min_360 = lon_min
+        lon_max_360 = lon_max
+    
+    # Perform the slice
+    if lat_descending:
+        lat_slice = slice(lat_max, lat_min)
+    else:
+        lat_slice = slice(lat_min, lat_max)
+    
+    lon_slice = slice(lon_min_360, lon_max_360) if lon_min >= 0 else None
+    
+    if lon_slice is not None:
+        sliced = ds.sel({lat_name: lat_slice, lon_name: lon_slice})
+    else:
+        # Handle crossing prime meridian
+        lon_west = ds.sel({lat_name: lat_slice, lon_name: slice(lon_min + 360, 360)})
+        lon_east = ds.sel({lat_name: lat_slice, lon_name: slice(0, lon_max)})
+        sliced = xr.concat([lon_west, lon_east], dim=lon_name)
+    
+    return sliced
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Inspect Zarr files from aurora-highres cluster workflow")
+    parser.add_argument(
+        "--data-dir", 
+        type=str, 
+        default="/projects/prjs1858",
+        help="Path to data directory containing zarr files (default: /projects/prjs1858)"
+    )
+    args = parser.parse_args()
+    
+    data_dir = Path(args.data_dir)
+    
+    print(f"\nInspecting Zarr files in: {data_dir}")
+    print(f"Europe bounds: lat={EUROPE_BOUNDS['lat']}, lon={EUROPE_BOUNDS['lon']}")
+    
+    # Expected files from the cluster workflow
+    expected_files = [
+        ("hres_europe_2018_2020.zarr", "HRES Europe 2018-2020"),
+        ("static_hres.zarr", "Static HRES (global)"),
+        ("latents_europe_2018_2020.zarr", "Latents Europe 2018-2020"),
+    ]
+    
+    # Also check test directory
+    test_files = [
+        ("test/hres_europe_jan2018.zarr", "Test HRES Jan 2018"),
+        ("test/static_hres.zarr", "Test Static HRES"),
+        ("test/latents_test.zarr", "Test Latents"),
+    ]
+    
+    # Find all .zarr directories
+    found_zarr = list(data_dir.glob("*.zarr")) + list(data_dir.glob("*/*.zarr"))
+    
+    print(f"\nFound {len(found_zarr)} zarr files/directories:")
+    for z in found_zarr:
+        print(f"  - {z.relative_to(data_dir)}")
+    
+    datasets = {}
+    
+    # Inspect each expected file (or any found zarr)
+    for zarr_file in found_zarr:
+        name = zarr_file.relative_to(data_dir).as_posix()
+        ds = inspect_zarr(zarr_file, name)
+        if ds is not None:
+            datasets[name] = ds
+    
+    # Check if static file needs slicing
+    static_key = next((k for k in datasets.keys() if 'static' in k.lower()), None)
+    if static_key:
+        print_section("Static File Europe Slicing")
+        ds_static = datasets[static_key]
+        print(f"\nOriginal static shape:")
+        for dim, size in ds_static.dims.items():
+            print(f"  {dim}: {size}")
+        
+        print(f"\nSlicing to Europe bounds: {EUROPE_BOUNDS}")
+        ds_static_europe = slice_static_to_europe(ds_static, EUROPE_BOUNDS)
+        print(f"\nSliced static shape:")
+        for dim, size in ds_static_europe.dims.items():
+            print(f"  {dim}: {size}")
+    
+    # Summary
+    print_section("SUMMARY")
+    print("\nDatasets and their shapes:")
+    for name, ds in datasets.items():
+        print(f"\n{name}:")
+        print(f"  Dimensions: {dict(ds.dims)}")
+        print(f"  Data vars: {list(ds.data_vars.keys())}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,132 +1,164 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from src.model import NeuralFieldSuperRes
-from src.data import SyntheticWeatherDataset
-import time
+#!/usr/bin/env python
+"""
+Neural Field Super-Resolution Training Script.
 
-def train():
-    # Hyperparameters
-    BATCH_SIZE = 16
-    LR = 1e-3
-    EPOCHS = 5
-    LATENT_DIM = 1
-    COORD_DIM = 2
-    NUM_HIDDEN = 64
-    NUM_HEADS = 4
-    NUM_QUERY_FEATURES = 64 # Assuming query features match hidden dim for now
+Usage:
+    # With Lightning CLI (recommended):
+    python -m src.train fit --config config/default.yaml
     
-    # Device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    # With experiment config:
+    python -m src.train fit --config config/experiment_europe.yaml
     
-    # Data
-    dataset = SyntheticWeatherDataset(num_samples=500, num_latents=50, num_queries=100, coord_dim=COORD_DIM)
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    # Override specific parameters:
+    python -m src.train fit --config config/default.yaml \
+        --data.latent_zarr_path /path/to/latents.zarr \
+        --data.hres_zarr_path /path/to/hres.zarr \
+        --trainer.max_epochs 50
     
-    # Test Configuration 1: Equivariant Decoder + Encoder
-    print("\n--- Testing Config 1: Equivariant Decoder + Encoder ---")
-    model = NeuralFieldSuperRes(
-        latent_dim=LATENT_DIM,
-        out_dim=1,
-        num_query_features=NUM_QUERY_FEATURES,
-        num_hidden=NUM_HIDDEN,
-        num_heads=NUM_HEADS,
-        coord_dim=COORD_DIM,
-        use_self_attention=True,
-        use_encoder=True,
-        num_encoder_layers=1,
-        decoder_type='equivariant',
-        num_decoder_layers=1
-    ).to(device)
-    
-    run_training(model, dataloader, device, EPOCHS, LR, NUM_QUERY_FEATURES)
+    # Quick test run:
+    python -m src.train fit --config config/default.yaml --trainer.fast_dev_run true
+"""
 
-    # Test Configuration 2: Attention Decoder (RoPE) + Encoder
-    print("\n--- Testing Config 2: Attention Decoder (RoPE) + Encoder ---")
-    model = NeuralFieldSuperRes(
-        latent_dim=LATENT_DIM,
-        out_dim=1,
-        num_query_features=NUM_QUERY_FEATURES,
-        num_hidden=NUM_HIDDEN,
-        num_heads=NUM_HEADS,
-        coord_dim=COORD_DIM,
-        use_self_attention=True,
-        use_encoder=True,
-        num_encoder_layers=1,
-        decoder_type='attention',
+import os
+import sys
+
+# Add src to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from pytorch_lightning.cli import LightningCLI
+
+from src.model import NeuralFieldSuperResModule
+from src.data import NeuralFieldDataModule
+
+
+class NeuralFieldCLI(LightningCLI):
+    """Custom CLI with project-specific defaults."""
+    
+    def add_arguments_to_parser(self, parser):
+        """Add custom arguments."""
+        parser.link_arguments(
+            "data.coord_dim", 
+            "model.init_args.coord_dim",
+            apply_on="parse"
+        )
+        parser.link_arguments(
+            "data.num_variables", 
+            "model.init_args.num_output_features",
+            apply_on="instantiate"
+        )
+        parser.link_arguments(
+            "data.num_variables", 
+            "model.init_args.num_query_features",
+            apply_on="instantiate"
+        )
+
+
+def cli_main():
+    """Main entry point for Lightning CLI."""
+    cli = NeuralFieldCLI(
+        NeuralFieldSuperResModule,
+        NeuralFieldDataModule,
+        save_config_kwargs={"overwrite": True},
+        subclass_mode_model=False,
+        subclass_mode_data=False,
+    )
+
+
+def manual_train():
+    """
+    Alternative manual training setup (without CLI).
+    
+    Useful for debugging or notebook usage.
+    """
+    import pytorch_lightning as pl
+    from pytorch_lightning.loggers import WandbLogger
+    from pytorch_lightning.callbacks import (
+        ModelCheckpoint, 
+        EarlyStopping, 
+        LearningRateMonitor
+    )
+    from src.callbacks import HRESVisualizationCallback
+    
+    # Paths - cluster data directory
+    LATENT_ZARR = "/projects/prjs1858/latents_europe_2018_2020.zarr"
+    HRES_ZARR = "/projects/prjs1858/hres_europe_2018_2020.zarr"
+    
+    # Create data module
+    datamodule = NeuralFieldDataModule(
+        latent_zarr_path=LATENT_ZARR,
+        hres_zarr_path=HRES_ZARR,
+        variables=["2t"],
+        mode="surface",
+        batch_size=4,
+        val_months=3,
+        num_workers=4,
+    )
+    
+    # Create model
+    model = NeuralFieldSuperResModule(
+        num_output_features=1,
+        num_input_features=256,
+        num_query_features=1,
+        num_hidden_features=256,
+        num_heads=8,
+        coord_dim=2,
+        coordinate_system="latlon",
         num_decoder_layers=2,
-        use_rope=True
-    ).to(device)
+        learning_rate=1e-4,
+        weight_decay=0.01,
+        use_scheduler=True,
+    )
     
-    run_training(model, dataloader, device, EPOCHS, LR, NUM_QUERY_FEATURES)
+    # Callbacks
+    callbacks = [
+        ModelCheckpoint(
+            dirpath="checkpoints/",
+            filename="epoch={epoch:03d}-val_loss={val/loss:.4f}",
+            monitor="val/loss",
+            mode="min",
+            save_top_k=3,
+            save_last=True,
+            auto_insert_metric_name=False,
+        ),
+        EarlyStopping(
+            monitor="val/loss",
+            patience=15,
+            mode="min",
+            verbose=True,
+        ),
+        LearningRateMonitor(logging_interval="epoch"),
+        HRESVisualizationCallback(
+            log_every_n_epochs=5,
+            num_samples=4,
+            variable_name="2t",
+        ),
+    ]
+    
+    # Logger
+    logger = WandbLogger(
+        project="neural-field-superres",
+        save_dir="logs/",
+    )
+    
+    # Trainer
+    trainer = pl.Trainer(
+        accelerator="auto",
+        devices="auto",
+        precision="16-mixed",
+        max_epochs=100,
+        gradient_clip_val=1.0,
+        callbacks=callbacks,
+        logger=logger,
+        log_every_n_steps=10,
+    )
+    
+    # Train
+    trainer.fit(model, datamodule=datamodule)
 
-    # Test Configuration 3: KNN Attention Decoder + Encoder
-    print("\n--- Testing Config 3: KNN Attention Decoder + Encoder ---")
-    model = NeuralFieldSuperRes(
-        latent_dim=LATENT_DIM,
-        out_dim=1,
-        num_query_features=NUM_QUERY_FEATURES,
-        num_hidden=NUM_HIDDEN,
-        num_heads=NUM_HEADS,
-        coord_dim=COORD_DIM,
-        use_self_attention=True,
-        use_encoder=True,
-        num_encoder_layers=1,
-        decoder_type='knn attn',
-        num_decoder_layers=1,
-        use_rope=True
-    ).to(device)
-    
-    run_training(model, dataloader, device, EPOCHS, LR, NUM_QUERY_FEATURES)
-
-def run_training(model, dataloader, device, epochs, lr, num_query_features):
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
-    
-    model.train()
-    start_time = time.time()
-    
-    for epoch in range(epochs):
-        total_loss = 0
-        for batch in dataloader:
-            latents = batch['latents'].to(device)       # [B, Z, 1]
-            latent_pos = batch['latent_pos'].to(device) # [B, Z, D]
-            query_pos = batch['query_pos'].to(device)   # [B, C, D]
-            targets = batch['targets'].to(device)       # [B, C, 1]
-            
-            # Mock grid features: [B, Z, num_hidden]
-            # In real usage, this would be a grid, but for testing shapes, latents works
-            grid_features = torch.randn(latents.shape[0], latents.shape[1], 64).to(device)
-            grid_pos = latent_pos # Mock grid pos
-            
-            # Mock query features
-            query_features = torch.randn(latents.shape[0], query_pos.shape[1], num_query_features).to(device)
-            
-            optimizer.zero_grad()
-            
-            # Forward
-            outputs = model(
-                latents=latents, 
-                latent_pos=latent_pos, 
-                query_pos=query_pos,
-                grid_features=grid_features,
-                grid_pos=grid_pos,
-                query_features=query_features
-            )
-            
-            # Loss
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
-            
-            total_loss += loss.item()
-            
-        avg_loss = total_loss / len(dataloader)
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.6f}")
-        
-    print(f"Training finished in {time.time() - start_time:.2f}s")
 
 if __name__ == "__main__":
-    train()
+    # Use Lightning CLI by default
+    cli_main()
+    
+    # Uncomment for manual training:
+    # manual_train()

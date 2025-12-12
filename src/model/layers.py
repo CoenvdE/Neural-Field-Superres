@@ -48,13 +48,14 @@ class CrossAttention(nn.Module):
                 init_std=pos_init_std,
             )
         elif positional_information_type == "rope":
-            self.pos_encoder = RotaryEmbedding(embed_dim) #TODO: make this for 2d matrix stuff
+            # self.pos_encoder = RotaryEmbedding(embed_dim) #TODO: make this for 2d matrix stuff
+            raise NotImplementedError
         elif positional_information_type == "bi-invariant":
             #TODO: fix
-            pass
+            raise NotImplementedError
         elif positional_information_type == "none":
             # TODO: fix
-            pass
+            raise NotImplementedError
         else:
             raise ValueError(f"Unknown positional_information_type: {positional_information_type}")
 
@@ -79,16 +80,15 @@ class CrossAttention(nn.Module):
             query = self.pos_encoder(query_pos)
             context = self.pos_encoder(context_pos)
         elif self.positional_information_type == "rope":
-            query_cos, query_sin = self.pos_encoder(query_pos)
-            context_cos, context_sin = self.pos_encoder(context_pos)
-            query = apply_rotary_pos_emb(query, query_cos, query_sin)
-            context = apply_rotary_pos_emb(context, context_cos, context_sin)
+            # query_cos, query_sin = self.pos_encoder(query_pos)
+            # context_cos, context_sin = self.pos_encoder(context_pos)
+            # query = apply_rotary_pos_emb(query, query_cos, query_sin)
+            # context = apply_rotary_pos_emb(context, context_cos, context_sin)
+            raise NotImplementedError
         elif self.positional_information_type == "bi-invariant":
-            #TODO: fix
-            pass
+            raise NotImplementedError
         elif self.positional_information_type == "none":
-            # TODO: fix
-            pass
+            raise NotImplementedError
 
         batch_size, num_query, _ = query.shape
         _, num_context, _ = context.shape
