@@ -76,7 +76,7 @@ data:
   # Europe-sliced static (create when needed):
   # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
   # Global static (available now):
-  static_zarr_path: /projects/prjs1858/static_hres.zarr
+  static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
   static_variables: ["z", "lsm", "slt"]
   static_statistics_path: /projects/prjs1858/static_hres_statistics.json
   use_static_features: true
