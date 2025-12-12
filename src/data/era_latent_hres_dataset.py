@@ -41,13 +41,13 @@ class EraLatentHresDataset(Dataset):
         latent_zarr_path: str,
         hres_zarr_path: str,
         variables: Optional[List[str]] = None,
+        static_zarr_path: Optional[str] = None,
+        static_variables: Optional[List[str]] = None,
+        use_static_features: bool = False,
         num_query_samples: Optional[int] = None,
         normalize_coords: bool = True,
         split: Optional[str] = None,
         val_months: int = 3,
-        static_zarr_path: Optional[str] = None,
-        static_variables: Optional[List[str]] = None,
-        use_static_features: bool = False,
     ):
         super().__init__()
         
