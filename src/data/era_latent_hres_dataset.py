@@ -46,6 +46,7 @@ class EraLatentHresDataset(Dataset):
         variables: Optional[List[str]] = None,
         static_zarr_path: Optional[str] = None,
         static_variables: Optional[List[str]] = None,
+        static_statistics_path: Optional[str] = None,
         use_static_features: bool = False,
         num_query_samples: Optional[int] = None,
         normalize_coords: bool = True,
@@ -66,6 +67,7 @@ class EraLatentHresDataset(Dataset):
         self.val_months = val_months
         self.static_zarr_path = static_zarr_path
         self.static_variables = static_variables or ['z', 'lsm', 'slt']
+        self.static_statistics_path = static_statistics_path
         self.use_static_features = use_static_features
         self.region_bounds = region_bounds
         self.statistics_path = statistics_path
@@ -221,7 +223,6 @@ class EraLatentHresDataset(Dataset):
         
         # Load statistics for static variables if using static features
         if self.use_static_features:
-            # Try to load static statistics from same file or dedicated static file
             static_stats_loaded = False
             
             # First, check if static variables are in the same stats file
@@ -231,12 +232,17 @@ class EraLatentHresDataset(Dataset):
                     self.static_std[var] = float(stats[var]['std'])
                     static_stats_loaded = True
             
-            # If not found in main file, try dedicated static statistics file
-            if not static_stats_loaded and self.static_zarr_path:
-                static_path = Path(self.static_zarr_path)
-                static_stats_path = static_path.parent / f"{static_path.stem}_statistics.json"
+            # If not found in main file, try explicit static_statistics_path or derive from zarr path
+            if not static_stats_loaded:
+                if self.static_statistics_path:
+                    static_stats_path = Path(self.static_statistics_path)
+                elif self.static_zarr_path:
+                    static_path = Path(self.static_zarr_path)
+                    static_stats_path = static_path.parent / f"{static_path.stem}_statistics.json"
+                else:
+                    static_stats_path = None
                 
-                if static_stats_path.exists():
+                if static_stats_path and static_stats_path.exists():
                     with open(static_stats_path, 'r') as f:
                         static_stats = json.load(f)
                     
@@ -245,6 +251,8 @@ class EraLatentHresDataset(Dataset):
                             self.static_mean[var] = float(static_stats[var]['mean'])
                             self.static_std[var] = float(static_stats[var]['std'])
                             static_stats_loaded = True
+                elif static_stats_path:
+                    print(f"Warning: Static statistics file not found at {static_stats_path}")
             
             if static_stats_loaded and self.static_mean:
                 print(f"Loaded static feature statistics:")

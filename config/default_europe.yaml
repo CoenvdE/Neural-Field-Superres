@@ -55,16 +55,15 @@ data:
     - "msl"                           # Mean sea level pressure
   
   # Query sampling - number of HRES points to sample per timestep
-  # Use 1000-8192 for training (memory efficient), null for full grid visualization
-  # WARNING: null causes OOM on A100-40GB for large regions - use only for small test regions
-  num_query_samples: 4096
+  # Full Europe has ~3200 latent tokens (vs 375 for Scandinavia) - reduce samples to fit in memory
+  num_query_samples: 1024
   
   # Train/val split
   val_months: 1                       # Reduced for partial data
   # val_months: 3                     # Use 3 months for full dataset
   
-  # DataLoader
-  batch_size: 4
+  # DataLoader - reduced batch size for full Europe (8.5x more latent tokens)
+  batch_size: 2
   num_workers: 4
   pin_memory: true
   normalize_coords: true
@@ -79,6 +78,7 @@ data:
   # Global static (available now):
   static_zarr_path: /projects/prjs1858/static_hres.zarr
   static_variables: ["z", "lsm", "slt"]
+  static_statistics_path: /projects/prjs1858/static_hres_statistics.json
   use_static_features: true
   
   # Region filtering - Full Europe (no filtering)
@@ -122,8 +122,9 @@ trainer:
     - class_path: src.callbacks.visualization.HRESVisualizationCallback
       init_args:
         log_every_n_epochs: 5
-        num_samples: 4
+        num_samples: 1
         variable_name: "2t"
+        plot_auxiliary_features: true
 
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger

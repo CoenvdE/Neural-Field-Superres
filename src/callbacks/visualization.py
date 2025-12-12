@@ -49,6 +49,7 @@ class HRESVisualizationCallback(L.Callback):
         dpi: int = 100,
         land_alpha: float = 0.3,  # Opacity of land mask
         use_cartopy: bool = True,  # Set to False to disable cartopy
+        plot_auxiliary_features: bool = True,  # Plot static/auxiliary features
     ):
         """
         Args:
@@ -61,6 +62,7 @@ class HRESVisualizationCallback(L.Callback):
             dpi: Figure DPI.
             land_alpha: Opacity of land mask overlay (0-1).
             use_cartopy: Whether to use cartopy for geographic projection.
+            plot_auxiliary_features: Whether to plot auxiliary/static features.
         """
         super().__init__()
         self.log_every_n_epochs = log_every_n_epochs
@@ -72,6 +74,7 @@ class HRESVisualizationCallback(L.Callback):
         self.dpi = dpi
         self.land_alpha = land_alpha
         self.use_cartopy = use_cartopy and HAS_CARTOPY
+        self.plot_auxiliary_features = plot_auxiliary_features
         
     def on_validation_epoch_end(
         self, 
@@ -189,6 +192,23 @@ class HRESVisualizationCallback(L.Callback):
                 ],
                 "epoch": trainer.current_epoch,
             })
+        
+        # Plot auxiliary features (once per validation, not per sample)
+        if self.plot_auxiliary_features and hasattr(val_dataset, 'static_features') and val_dataset.static_features is not None:
+            aux_fig = self._create_auxiliary_figure(
+                val_dataset.static_features,
+                val_dataset.static_variables if hasattr(val_dataset, 'static_variables') else ['z', 'lsm', 'slt'],
+                hres_shape,
+                geo_bounds,
+                trainer.current_epoch,
+            )
+            if aux_fig is not None:
+                aux_img = self._fig_to_image(aux_fig)
+                plt.close(aux_fig)
+                wandb_logger.experiment.log({
+                    "val/auxiliary_features": wandb.Image(aux_img, caption="Static/Auxiliary Features"),
+                    "epoch": trainer.current_epoch,
+                })
     
     def _create_comparison_figure(
         self,
@@ -441,3 +461,104 @@ class HRESVisualizationCallback(L.Callback):
             return trainer.datamodule.geo_bounds
         
         return None
+    
+    def _create_auxiliary_figure(
+        self,
+        static_features: np.ndarray,
+        static_variables: List[str],
+        hres_shape: Tuple[int, int],
+        geo_bounds: Optional[Dict[str, float]],
+        epoch: int,
+    ) -> Optional[plt.Figure]:
+        """Create a figure showing auxiliary/static features."""
+        num_vars = static_features.shape[-1]
+        if num_vars == 0:
+            return None
+        
+        # Variable-specific colormaps and labels
+        var_config = {
+            'z': {'cmap': 'terrain', 'label': 'Geopotential (z)'},
+            'lsm': {'cmap': 'Blues_r', 'label': 'Land-Sea Mask'},
+            'slt': {'cmap': 'tab10', 'label': 'Soil Type'},
+        }
+        
+        fig_width = 6 * num_vars
+        fig_height = 5
+        
+        if self.use_cartopy and geo_bounds is not None:
+            projection = ccrs.PlateCarree()
+            fig, axes = plt.subplots(
+                1, num_vars,
+                figsize=(fig_width, fig_height),
+                dpi=self.dpi,
+                subplot_kw={'projection': projection}
+            )
+        else:
+            fig, axes = plt.subplots(1, num_vars, figsize=(fig_width, fig_height), dpi=self.dpi)
+        
+        if num_vars == 1:
+            axes = [axes]
+        
+        # Extent for imshow
+        if geo_bounds:
+            extent = [
+                geo_bounds["lon_min"], geo_bounds["lon_max"],
+                geo_bounds["lat_min"], geo_bounds["lat_max"]
+            ]
+        else:
+            extent = None
+        
+        for idx, ax in enumerate(axes):
+            var_name = static_variables[idx] if idx < len(static_variables) else f"var_{idx}"
+            config = var_config.get(var_name, {'cmap': 'viridis', 'label': var_name})
+            
+            # Reshape to 2D
+            try:
+                data_2d = static_features[:, idx].reshape(hres_shape)
+            except ValueError:
+                continue
+            
+            if self.use_cartopy and geo_bounds is not None:
+                ax.set_extent(extent, crs=ccrs.PlateCarree())
+                im = ax.imshow(
+                    data_2d,
+                    cmap=config['cmap'],
+                    extent=extent,
+                    origin="upper",
+                    transform=ccrs.PlateCarree(),
+                )
+                ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+                ax.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+                gl = ax.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
+                gl.top_labels = False
+                gl.right_labels = False
+            else:
+                im = ax.imshow(
+                    data_2d,
+                    cmap=config['cmap'],
+                    aspect="auto",
+                    origin="upper",
+                    extent=extent,
+                )
+                ax.set_xlabel("Longitude")
+                ax.set_ylabel("Latitude")
+            
+            ax.set_title(config['label'])
+            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, orientation='horizontal')
+        
+        if geo_bounds:
+            region_str = (
+                f"Region: ({geo_bounds['lat_min']:.1f}°N to {geo_bounds['lat_max']:.1f}°N, "
+                f"{geo_bounds['lon_min']:.1f}°E to {geo_bounds['lon_max']:.1f}°E)"
+            )
+        else:
+            region_str = ""
+        
+        fig.suptitle(
+            f"Auxiliary Features | Epoch {epoch + 1} | {region_str}",
+            fontsize=12,
+            fontweight="bold",
+        )
+        
+        plt.tight_layout()
+        return fig

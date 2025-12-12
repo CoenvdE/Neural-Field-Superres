@@ -78,6 +78,7 @@ data:
   # Global static (available now):
   static_zarr_path: /projects/prjs1858/static_hres.zarr
   static_variables: ["z", "lsm", "slt"]
+  static_statistics_path: /projects/prjs1858/static_hres_statistics.json
   use_static_features: true
   
   # Region filtering (optional) - set all 4 to enable, or set to null for full Europe
@@ -134,8 +135,9 @@ trainer:
     - class_path: src.callbacks.visualization.HRESVisualizationCallback
       init_args:
         log_every_n_epochs: 5
-        num_samples: 4
+        num_samples: 1
         variable_name: "2t"
+        plot_auxiliary_features: true
 
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger

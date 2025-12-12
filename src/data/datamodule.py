@@ -42,6 +42,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
         # Static/auxiliary features
         static_zarr_path: Optional[str] = None,
         static_variables: Optional[List[str]] = None,
+        static_statistics_path: Optional[str] = None,
         use_static_features: bool = False,
         
         # Region filtering - individual floats for CLI compatibility
@@ -66,6 +67,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
         self.statistics_path = statistics_path
         self.static_zarr_path = static_zarr_path
         self.static_variables = static_variables
+        self.static_statistics_path = static_statistics_path
         self.use_static_features = use_static_features
         
         # Build region_bounds dict from individual params if any are set
@@ -97,6 +99,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
                 val_months=self.val_months,
                 static_zarr_path=self.static_zarr_path,
                 static_variables=self.static_variables,
+                static_statistics_path=self.static_statistics_path,
                 use_static_features=self.use_static_features,
                 region_bounds=self.region_bounds,
             )
@@ -113,6 +116,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
                 val_months=self.val_months,
                 static_zarr_path=self.static_zarr_path,
                 static_variables=self.static_variables,
+                static_statistics_path=self.static_statistics_path,
                 use_static_features=self.use_static_features,
                 region_bounds=self.region_bounds,
             )

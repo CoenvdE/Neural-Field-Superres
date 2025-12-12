@@ -50,10 +50,8 @@ echo ""
 echo "============================================================"
 echo " Running pre-training visualization (untrained model)"
 echo "============================================================"
-python scripts/verify_pipeline.py \
-    --data-dir /projects/prjs1858 \
-    --region europe \
-    --viz
+# Skip verify_pipeline for full Europe (no region preset available)
+echo "Skipping verify_pipeline (no europe region preset)"
 
 # Move the visualization to a timestamped file
 if [ -f test_visualization.png ]; then
