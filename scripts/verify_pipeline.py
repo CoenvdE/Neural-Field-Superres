@@ -326,7 +326,7 @@ def test_model_forward(data_dir: str):
         return False
 
 
-def test_visualization(data_dir: str):
+def test_visualization(data_dir: str, region_bounds: dict = None):
     """Test the visualization callback by generating a sample plot."""
     from pathlib import Path
     
@@ -347,6 +347,9 @@ def test_visualization(data_dir: str):
     data_dir = Path(data_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
+    if region_bounds:
+        print(f"\n  Testing with region: {region_bounds}")
+    
     try:
         # Create datamodule with FULL grid (no subsampling) for visualization
         dm = NeuralFieldDataModule(
@@ -358,6 +361,7 @@ def test_visualization(data_dir: str):
             num_workers=0,
             normalize_coords=True,
             val_months=1,
+            region_bounds=region_bounds,
         )
         dm.setup("fit")
         
@@ -395,7 +399,7 @@ def test_visualization(data_dir: str):
         model = model.to(device)
         model.eval()
         
-        # Forward pass in chunks to avoid OOM (full grid is 647K points!)
+        # Forward pass in chunks to avoid OOM
         query_pos = batch["query_pos"]  # [1, Q, 2]
         latents = batch["latents"]      # [1, Z, 512]
         latent_pos = batch["latent_pos"]  # [1, Z, 2]
@@ -431,34 +435,47 @@ def test_visualization(data_dir: str):
         # Try to get HRES shape for reshaping
         if hasattr(dm, 'hres_shape') and dm.hres_shape is not None:
             hres_shape = dm.hres_shape
+            geo = dm.geo_bounds
             print(f"\n  Attempting to reshape to {hres_shape}...")
             try:
                 pred_2d = pred.reshape(hres_shape)
                 target_2d = target.reshape(hres_shape)
                 diff_2d = pred_2d - target_2d
                 
-                # Create simple visualization
+                # Compute extent for geographic coordinates [lon_min, lon_max, lat_min, lat_max]
+                extent = [geo['lon_min'], geo['lon_max'], geo['lat_min'], geo['lat_max']]
+                
+                # Create simple visualization with proper geographic extent
                 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
                 
                 vmin = min(target_2d.min(), pred_2d.min())
                 vmax = max(target_2d.max(), pred_2d.max())
                 err_max = max(abs(diff_2d.min()), abs(diff_2d.max()))
                 
-                im0 = axes[0].imshow(target_2d, origin='upper', cmap='RdYlBu_r', vmin=vmin, vmax=vmax)
+                im0 = axes[0].imshow(target_2d, origin='upper', cmap='RdYlBu_r', 
+                                      vmin=vmin, vmax=vmax, extent=extent, aspect='auto')
                 axes[0].set_title("Ground Truth (2t)")
-                plt.colorbar(im0, ax=axes[0])
+                axes[0].set_xlabel("Longitude")
+                axes[0].set_ylabel("Latitude")
+                plt.colorbar(im0, ax=axes[0], label="K")
                 
-                im1 = axes[1].imshow(pred_2d, origin='upper', cmap='RdYlBu_r', vmin=vmin, vmax=vmax)
-                axes[1].set_title("Prediction (2t)")
-                plt.colorbar(im1, ax=axes[1])
+                im1 = axes[1].imshow(pred_2d, origin='upper', cmap='RdYlBu_r', 
+                                      vmin=vmin, vmax=vmax, extent=extent, aspect='auto')
+                axes[1].set_title("Prediction (2t) - UNTRAINED MODEL")
+                axes[1].set_xlabel("Longitude")
+                axes[1].set_ylabel("Latitude")
+                plt.colorbar(im1, ax=axes[1], label="K")
                 
-                im2 = axes[2].imshow(diff_2d, origin='upper', cmap='RdBu_r', vmin=-err_max, vmax=err_max)
+                im2 = axes[2].imshow(diff_2d, origin='upper', cmap='RdBu_r', 
+                                      vmin=-err_max, vmax=err_max, extent=extent, aspect='auto')
                 axes[2].set_title("Error (Pred - GT)")
-                plt.colorbar(im2, ax=axes[2])
+                axes[2].set_xlabel("Longitude")
+                axes[2].set_ylabel("Latitude")
+                plt.colorbar(im2, ax=axes[2], label="K")
                 
                 rmse = np.sqrt(np.mean(diff_2d ** 2))
                 mae = np.mean(np.abs(diff_2d))
-                fig.suptitle(f"RMSE: {rmse:.4f} | MAE: {mae:.4f}")
+                fig.suptitle(f"RMSE: {rmse:.4f} K | MAE: {mae:.4f} K (Note: Model is untrained)")
                 
                 plt.tight_layout()
                 
@@ -545,7 +562,7 @@ def main():
         test_model_forward(args.data_dir)
     
     if args.viz:
-        test_visualization(args.data_dir)
+        test_visualization(args.data_dir, region_bounds)
     
     print("\n" + "=" * 60)
     print(" Verification Complete!")
