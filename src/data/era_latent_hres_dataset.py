@@ -223,16 +223,17 @@ class EraLatentHresDataset(Dataset):
         
         # Load statistics for static variables if using static features
         if self.use_static_features:
+            static_stats_loaded = False
+            
             # First, check if static variables are in the same stats file
             for var in self.static_variables:
                 if var in stats:
                     self.static_mean[var] = float(stats[var]['mean'])
                     self.static_std[var] = float(stats[var]['std'])
+                    static_stats_loaded = True
             
-            # Check which static vars are missing and try to load from separate file
-            missing_vars = [v for v in self.static_variables if v not in self.static_mean]
-            
-            if missing_vars:
+            # If not found in main file, try explicit static_statistics_path or derive from zarr path
+            if not static_stats_loaded:
                 if self.static_statistics_path:
                     static_stats_path = Path(self.static_statistics_path)
                 elif self.static_zarr_path:
@@ -245,27 +246,18 @@ class EraLatentHresDataset(Dataset):
                     with open(static_stats_path, 'r') as f:
                         static_stats = json.load(f)
                     
-                    for var in missing_vars:
+                    for var in self.static_variables:
                         if var in static_stats:
                             self.static_mean[var] = float(static_stats[var]['mean'])
                             self.static_std[var] = float(static_stats[var]['std'])
-                        else:
-                            print(f"Warning: Static variable '{var}' not found in {static_stats_path}")
+                            static_stats_loaded = True
                 elif static_stats_path:
                     print(f"Warning: Static statistics file not found at {static_stats_path}")
-                else:
-                    print(f"Warning: No static statistics path configured for variables: {missing_vars}")
             
-            if self.static_mean:
+            if static_stats_loaded and self.static_mean:
                 print(f"Loaded static feature statistics:")
                 for var in self.static_mean.keys():
                     print(f"  {var}: mean={self.static_mean[var]:.2f}, std={self.static_std[var]:.2f}")
-            
-            # Final check - warn if any static vars won't be normalized
-            unnormalized = [v for v in self.static_variables if v not in self.static_mean]
-            if unnormalized:
-                print(f"ERROR: Static variables {unnormalized} have NO statistics - they will NOT be normalized!")
-                print(f"       This will cause very high predictions since z has values ~5000!")
     
     def _compute_bounds(self):
         """Compute lat/lon bounds for normalization based on latent grid coverage."""
