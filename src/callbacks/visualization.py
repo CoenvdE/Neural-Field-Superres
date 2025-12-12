@@ -7,8 +7,8 @@ during training, using cartopy for geographic projection with land mask overlay.
 
 import torch
 import numpy as np
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
+import lightning as L
+from lightning.pytorch.loggers import WandbLogger
 from typing import Optional, List, Tuple, Dict
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -25,7 +25,7 @@ except ImportError:
     print("Warning: cartopy not installed. Geographic visualization will use basic imshow.")
 
 
-class HRESVisualizationCallback(pl.Callback):
+class HRESVisualizationCallback(L.Callback):
     """
     Callback to visualize HRES predictions during validation.
     
@@ -75,12 +75,14 @@ class HRESVisualizationCallback(pl.Callback):
         
     def on_validation_epoch_end(
         self, 
-        trainer: pl.Trainer, 
-        pl_module: pl.LightningModule
+        trainer: L.Trainer, 
+        pl_module: L.LightningModule
     ) -> None:
         """Generate and log full-grid visualizations at end of validation epoch."""
-        # Check if we should log this epoch
-        if (trainer.current_epoch + 1) % self.log_every_n_epochs != 0:
+        # Check if we should log this epoch (always log epoch 0 for pre-training viz)
+        if trainer.current_epoch == 0:
+            pass  # Always visualize at epoch 0
+        elif (trainer.current_epoch + 1) % self.log_every_n_epochs != 0:
             return
         
         # Get WandB logger
@@ -141,6 +143,16 @@ class HRESVisualizationCallback(pl.Callback):
                 # Move to CPU for visualization
                 pred = predictions[0, :, 0].cpu().numpy()    # [Q] - first variable
                 target = query_fields[0, :, 0].numpy()       # [Q]
+                
+                # Denormalize predictions and targets back to original scale
+                if hasattr(trainer.datamodule, 'denormalize_targets'):
+                    var_idx = 0  # First variable
+                    pred = trainer.datamodule.denormalize_targets(
+                        torch.from_numpy(pred).unsqueeze(-1), var_idx
+                    ).squeeze(-1).numpy()
+                    target = trainer.datamodule.denormalize_targets(
+                        torch.from_numpy(target).unsqueeze(-1), var_idx
+                    ).squeeze(-1).numpy()
                 
                 # Reshape to 2D grid
                 try:
@@ -394,7 +406,7 @@ class HRESVisualizationCallback(pl.Callback):
         buf.seek(0)
         return Image.open(buf)
     
-    def _get_wandb_logger(self, trainer: pl.Trainer) -> Optional[WandbLogger]:
+    def _get_wandb_logger(self, trainer: L.Trainer) -> Optional[WandbLogger]:
         """Get WandB logger from trainer."""
         if trainer.logger is None:
             return None
@@ -410,7 +422,7 @@ class HRESVisualizationCallback(pl.Callback):
         
         return None
     
-    def _get_hres_shape(self, trainer: pl.Trainer) -> Optional[Tuple[int, int]]:
+    def _get_hres_shape(self, trainer: L.Trainer) -> Optional[Tuple[int, int]]:
         """Get HRES grid shape from datamodule."""
         if trainer.datamodule is None:
             return None
@@ -420,7 +432,7 @@ class HRESVisualizationCallback(pl.Callback):
         
         return None
     
-    def _get_geo_bounds(self, trainer: pl.Trainer) -> Optional[Dict[str, float]]:
+    def _get_geo_bounds(self, trainer: L.Trainer) -> Optional[Dict[str, float]]:
         """Get geographic bounds from datamodule."""
         if trainer.datamodule is None:
             return None

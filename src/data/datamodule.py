@@ -4,14 +4,14 @@ PyTorch Lightning DataModule for Neural Field Super-Resolution.
 Surface-only: 2D (lat, lon) for surface variables (2t, msl).
 """
 
-import pytorch_lightning as pl
+import lightning as L
 from torch.utils.data import DataLoader
 from typing import Optional, List, Dict
 
 from .era_latent_hres_dataset import EraLatentHresDataset
 
 
-class NeuralFieldDataModule(pl.LightningDataModule):
+class NeuralFieldDataModule(L.LightningDataModule):
     """DataModule for ERA5 latents -> HRES surface field reconstruction."""
     
     def __init__(
@@ -36,6 +36,8 @@ class NeuralFieldDataModule(pl.LightningDataModule):
         
         # Normalization
         normalize_coords: bool = True,
+        normalize_targets: bool = True,
+        statistics_path: Optional[str] = None,
         
         # Static/auxiliary features
         static_zarr_path: Optional[str] = None,
@@ -60,6 +62,8 @@ class NeuralFieldDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.normalize_coords = normalize_coords
+        self.normalize_targets = normalize_targets
+        self.statistics_path = statistics_path
         self.static_zarr_path = static_zarr_path
         self.static_variables = static_variables
         self.use_static_features = use_static_features
@@ -87,6 +91,8 @@ class NeuralFieldDataModule(pl.LightningDataModule):
                 variables=self.variables,
                 num_query_samples=self.num_query_samples,
                 normalize_coords=self.normalize_coords,
+                normalize_targets=self.normalize_targets,
+                statistics_path=self.statistics_path,
                 split="train",
                 val_months=self.val_months,
                 static_zarr_path=self.static_zarr_path,
@@ -101,6 +107,8 @@ class NeuralFieldDataModule(pl.LightningDataModule):
                 variables=self.variables,
                 num_query_samples=self.num_query_samples,
                 normalize_coords=self.normalize_coords,
+                normalize_targets=self.normalize_targets,
+                statistics_path=self.statistics_path,
                 split="val",
                 val_months=self.val_months,
                 static_zarr_path=self.static_zarr_path,
@@ -144,3 +152,11 @@ class NeuralFieldDataModule(pl.LightningDataModule):
         elif self.val_dataset is not None:
             return self.val_dataset.geo_bounds
         return None
+    
+    def denormalize_targets(self, normalized_data, var_idx: int):
+        """Denormalize target data back to original scale."""
+        if self.val_dataset is not None:
+            return self.val_dataset.denormalize_targets(normalized_data, var_idx)
+        elif self.train_dataset is not None:
+            return self.train_dataset.denormalize_targets(normalized_data, var_idx)
+        return normalized_data

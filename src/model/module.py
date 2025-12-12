@@ -12,14 +12,14 @@ Terminology:
 
 import torch
 import torch.nn as nn
-import pytorch_lightning as pl
+import lightning as L
 from typing import Optional, List, Dict, Any, Literal
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from .model import NeuralFieldSuperRes
 
 
-class NeuralFieldSuperResModule(pl.LightningModule):
+class NeuralFieldSuperResModule(L.LightningModule):
     """
     Lightning module for Neural Field Super-Resolution training.
     

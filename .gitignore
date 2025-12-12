@@ -21,3 +21,5 @@ rad.json
 venv/
 #Test results file
 TestResults.xml
+
+logs

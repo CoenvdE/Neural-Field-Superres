@@ -25,7 +25,7 @@ import sys
 # Add src to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pytorch_lightning.cli import LightningCLI
+from lightning.pytorch.cli import LightningCLI
 
 from src.model import NeuralFieldSuperResModule
 from src.data import NeuralFieldDataModule
@@ -58,9 +58,9 @@ def manual_train():
     
     Useful for debugging or notebook usage.
     """
-    import pytorch_lightning as pl
-    from pytorch_lightning.loggers import WandbLogger
-    from pytorch_lightning.callbacks import (
+    import lightning as L
+    from lightning.pytorch.loggers import WandbLogger
+    from lightning.pytorch.callbacks import (
         ModelCheckpoint, 
         EarlyStopping, 
         LearningRateMonitor
@@ -129,7 +129,7 @@ def manual_train():
     )
     
     # Trainer
-    trainer = pl.Trainer(
+    trainer = L.Trainer(
         accelerator="auto",
         devices="auto",
         precision="16-mixed",

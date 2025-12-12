@@ -18,6 +18,8 @@ import numpy as np
 import pandas as pd
 from typing import Optional, List, Tuple, Dict
 import xarray as xr
+import json
+from pathlib import Path
 
 
 class EraLatentHresDataset(Dataset):
@@ -47,6 +49,8 @@ class EraLatentHresDataset(Dataset):
         use_static_features: bool = False,
         num_query_samples: Optional[int] = None,
         normalize_coords: bool = True,
+        normalize_targets: bool = True,
+        statistics_path: Optional[str] = None,
         split: Optional[str] = None,
         val_months: int = 3,
         region_bounds: Optional[Dict[str, float]] = None,
@@ -56,6 +60,7 @@ class EraLatentHresDataset(Dataset):
         self.latent_zarr_path = latent_zarr_path
         self.hres_zarr_path = hres_zarr_path
         self.normalize_coords = normalize_coords
+        self.normalize_targets = normalize_targets
         self.num_query_samples = num_query_samples
         self.split = split
         self.val_months = val_months
@@ -63,6 +68,7 @@ class EraLatentHresDataset(Dataset):
         self.static_variables = static_variables or ['z', 'lsm', 'slt']
         self.use_static_features = use_static_features
         self.region_bounds = region_bounds
+        self.statistics_path = statistics_path
         
         # Open Zarr stores
         self.latent_ds = xr.open_zarr(latent_zarr_path, consolidated=True)
@@ -89,6 +95,9 @@ class EraLatentHresDataset(Dataset):
             self.variables = [v for v in self.hres_ds.data_vars if v not in self.hres_ds.coords]
         else:
             self.variables = variables
+        
+        # Load normalization statistics for target variables
+        self._load_statistics()
         
         # Compute bounds for normalization (based on latent grid)
         self._compute_bounds()
@@ -168,6 +177,46 @@ class EraLatentHresDataset(Dataset):
                 self.time_indices = np.where(times > cutoff)[0].tolist()
                 self.split_info = f"val ({len(self.time_indices)} timesteps)"
     
+    def _load_statistics(self):
+        """Load pre-computed statistics for target variable normalization."""
+        self.target_mean = {}
+        self.target_std = {}
+        
+        if not self.normalize_targets:
+            return
+        
+        # Try to load statistics file
+        if self.statistics_path is None:
+            # Try default path based on hres_zarr_path
+            hres_path = Path(self.hres_zarr_path)
+            stats_path = hres_path.parent / f"{hres_path.stem}_statistics.json"
+        else:
+            stats_path = Path(self.statistics_path)
+        
+        if not stats_path.exists():
+            print(f"Warning: Statistics file not found at {stats_path}")
+            print("Target normalization will be disabled.")
+            self.normalize_targets = False
+            return
+        
+        # Load statistics
+        with open(stats_path, 'r') as f:
+            stats = json.load(f)
+        
+        # Extract mean and std for each variable
+        for var in self.variables:
+            if var in stats:
+                self.target_mean[var] = float(stats[var]['mean'])
+                self.target_std[var] = float(stats[var]['std'])
+            else:
+                print(f"Warning: Statistics not found for variable {var}")
+                self.normalize_targets = False
+                return
+        
+        print(f"Loaded target statistics from {stats_path}")
+        for var in self.variables:
+            print(f"  {var}: mean={self.target_mean[var]:.2f}, std={self.target_std[var]:.2f}")
+    
     def _compute_bounds(self):
         """Compute lat/lon bounds for normalization based on latent grid coverage."""
         # Use latent bounds as the base - HRES is already clipped to these
@@ -242,6 +291,29 @@ class EraLatentHresDataset(Dataset):
             "lon_max": float(self.hres_lon.max()),
         }
     
+    def denormalize_targets(self, normalized_data: torch.Tensor, var_idx: int) -> torch.Tensor:
+        """
+        Denormalize target data back to original scale.
+        
+        Args:
+            normalized_data: [..., num_vars] normalized data
+            var_idx: Index of variable to denormalize
+            
+        Returns:
+            Denormalized data in original units
+        """
+        if not self.normalize_targets or var_idx >= len(self.variables):
+            return normalized_data
+        
+        var = self.variables[var_idx]
+        if var not in self.target_mean:
+            return normalized_data
+        
+        mean = self.target_mean[var]
+        std = self.target_std[var]
+        
+        return normalized_data * std + mean
+    
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         time_idx = self.time_indices[idx]
         
@@ -262,6 +334,11 @@ class EraLatentHresDataset(Dataset):
                 latitude=self.hres_lat_indices,
                 longitude=self.hres_lon_indices,
             ).values.flatten()
+            
+            # Apply Z-score normalization if enabled
+            if self.normalize_targets and var in self.target_mean:
+                data = (data - self.target_mean[var]) / self.target_std[var]
+            
             fields.append(data)
         query_fields = np.stack(fields, axis=-1).astype(np.float32)
         
