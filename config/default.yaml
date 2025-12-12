@@ -79,15 +79,16 @@ data:
     
     # Region filtering (optional)
     # Set to null for full Europe coverage, or specify bounds for a sub-region
-    region_bounds: null
+    # region_bounds: null
     
-    # Example regions:
-    # Alps:
-    #   region_bounds:
-    #     lat_min: 45.0
-    #     lat_max: 48.0
-    #     lon_min: 5.0
-    #     lon_max: 16.0
+    # Alps region:
+    region_bounds:
+      lat_min: 45.0
+      lat_max: 48.0
+      lon_min: 5.0
+      lon_max: 16.0
+    
+    # Other example regions:
     # Iberian Peninsula:
     #   region_bounds:
     #     lat_min: 36.0
