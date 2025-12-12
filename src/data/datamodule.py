@@ -124,6 +124,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
+            multiprocessing_context="forkserver" if self.num_workers > 0 else None,
         )
     
     def val_dataloader(self) -> DataLoader:
@@ -133,6 +134,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
+            multiprocessing_context="forkserver" if self.num_workers > 0 else None,
         )
     
     @property

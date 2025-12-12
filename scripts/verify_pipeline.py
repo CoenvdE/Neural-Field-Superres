@@ -211,6 +211,8 @@ def test_datamodule(data_dir: str, region_bounds: dict = None):
             batch_size=2,
             num_workers=0,  # Single-threaded for testing
             normalize_coords=True,
+            normalize_targets=True,
+            statistics_path=str(data_dir / "hres_europe_2018_statistics.json"),
             val_months=1,
             region_lat_min=region_bounds.get("lat_min") if region_bounds else None,
             region_lat_max=region_bounds.get("lat_max") if region_bounds else None,
@@ -274,6 +276,8 @@ def test_model_forward(data_dir: str, region_bounds: dict = None):
             batch_size=2,
             num_workers=0,
             normalize_coords=True,
+            normalize_targets=True,
+            statistics_path=str(data_dir / "hres_europe_2018_statistics.json"),
             val_months=1,
             region_lat_min=region_bounds.get("lat_min") if region_bounds else None,
             region_lat_max=region_bounds.get("lat_max") if region_bounds else None,
@@ -378,6 +382,8 @@ def test_visualization(data_dir: str, region_bounds: dict = None):
             batch_size=1,
             num_workers=0,
             normalize_coords=True,
+            normalize_targets=True,
+            statistics_path=str(data_dir / "hres_europe_2018_statistics.json"),
             val_months=1,
             region_lat_min=region_bounds.get("lat_min") if region_bounds else None,
             region_lat_max=region_bounds.get("lat_max") if region_bounds else None,
@@ -452,6 +458,16 @@ def test_visualization(data_dir: str, region_bounds: dict = None):
         # Manual visualization test (mirroring callback logic)
         pred = predictions[0, :, 0].cpu().numpy()  # First variable (2t)
         target = batch["query_fields"][0, :, 0].cpu().numpy()
+        
+        # Denormalize both predictions and targets back to original scale
+        if hasattr(dm, 'denormalize_targets'):
+            var_idx = 0  # First variable (2t)
+            pred = dm.denormalize_targets(
+                torch.from_numpy(pred).unsqueeze(-1), var_idx
+            ).squeeze(-1).numpy()
+            target = dm.denormalize_targets(
+                torch.from_numpy(target).unsqueeze(-1), var_idx
+            ).squeeze(-1).numpy()
         
         # Try to get HRES shape for reshaping
         if hasattr(dm, 'hres_shape') and dm.hres_shape is not None:
