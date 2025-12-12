@@ -26,7 +26,7 @@ model:
   use_rope: false
   
   # Auxiliary features (z, lsm, slt)
-  num_auxiliary_features: 0           # 0 = disabled, 3 = enabled
+  num_auxiliary_features: 3           # Match the 3 static variables: z, lsm, slt
   
   # Optimizer
   learning_rate: 1.0e-4
@@ -79,7 +79,7 @@ data:
   # Global static (available now):
   static_zarr_path: /projects/prjs1858/static_hres.zarr
   static_variables: ["z", "lsm", "slt"]
-  use_static_features: false
+  use_static_features: true
   
   # Region filtering - Full Europe (no filtering)
   region_lat_min: null
