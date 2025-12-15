@@ -72,7 +72,7 @@ class NeuralFieldSuperRes(nn.Module):
                         num_heads,
                         coord_dim=coord_dim,
                         pos_init_std=self.pos_init_std,
-                        use_rope=use_rope, #NOTE: disabled for now
+                        positional_information_type="rope" if use_rope else "rff",
                     )
                 )
 

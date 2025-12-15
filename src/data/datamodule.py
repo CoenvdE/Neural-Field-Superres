@@ -163,6 +163,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
             return self.val_dataset.geo_bounds
         return None
     
+    
     def denormalize_targets(self, normalized_data, var_idx: int):
         """Denormalize target data back to original scale."""
         if self.val_dataset is not None:
@@ -170,3 +171,22 @@ class NeuralFieldDataModule(L.LightningDataModule):
         elif self.train_dataset is not None:
             return self.train_dataset.denormalize_targets(normalized_data, var_idx)
         return normalized_data
+    
+    @property
+    def target_variables(self):
+        """Get target variable names for visualization."""
+        if self.train_dataset is not None:
+            return self.train_dataset.variables
+        elif self.val_dataset is not None:
+            return self.val_dataset.variables
+        return self.variables  # Fallback to config
+    
+    @property
+    def target_statistics(self):
+        """Get target statistics for uncertainty denormalization."""
+        if self.train_dataset is not None:
+            return self.train_dataset.statistics
+        elif self.val_dataset is not None:
+            return self.val_dataset.statistics
+        return None
+
