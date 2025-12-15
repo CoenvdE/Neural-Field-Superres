@@ -233,8 +233,9 @@ class HRESVisualizationCallback(L.Callback):
     ) -> plt.Figure:
         """Create multi-variable figure using cartopy.
         
-        When uncertainty_data is provided, creates 4 columns: GT, Pred, Error, Uncertainty.
-        Otherwise creates 2 columns: GT, Pred.
+        Layout: Prediction | Ground Truth | Error (| Uncertainty if likelihood)
+        When uncertainty_data is provided, creates 4 columns.
+        Otherwise creates 3 columns: Pred, GT, Error.
         """
         num_vars = len(var_data)
         
@@ -245,8 +246,8 @@ class HRESVisualizationCallback(L.Callback):
         lat_max = geo_bounds["lat_max"]
         extent = [lon_min, lon_max, lat_min, lat_max]
         
-        # Determine number of columns (2 for MSE, 4 for likelihood)
-        num_cols = 4 if uncertainty_data is not None else 2
+        # Determine number of columns (3 for MSE with error, 4 for likelihood with uncertainty)
+        num_cols = 4 if uncertainty_data is not None else 3
         
         # Create figure
         projection = ccrs.PlateCarree()
@@ -267,19 +268,45 @@ class HRESVisualizationCallback(L.Callback):
             vmin = min(target.min(), pred.min())
             vmax = max(target.max(), pred.max())
             
-            # Ground Truth
-            ax_gt = axes[row_idx, 0]
-            ax_gt.set_extent(extent, crs=projection)
-            im_gt = ax_gt.imshow(
-                target,
-                cmap="RdYlBu_r",  # Standard colormap for temperature
+            # Compute metrics for this variable
+            diff = pred - target
+            rmse = np.sqrt(np.mean(diff ** 2))
+            mae = np.mean(np.abs(diff))
+            
+            # Column 0: Prediction (left)
+            ax_pred = axes[row_idx, 0]
+            ax_pred.set_extent(extent, crs=projection)
+            im_pred = ax_pred.imshow(
+                pred,
+                cmap="RdYlBu_r",
                 vmin=vmin,
                 vmax=vmax,
                 extent=extent,
                 origin="upper",
                 transform=projection,
             )
-            ax_gt.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')  # Standard land opacity
+            ax_pred.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')
+            ax_pred.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+            ax_pred.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+            gl_pred = ax_pred.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
+            gl_pred.top_labels = False
+            gl_pred.right_labels = False
+            ax_pred.set_title(f"Prediction ({var_name})")
+            plt.colorbar(im_pred, ax=ax_pred, fraction=0.046, pad=0.04, orientation='horizontal')
+            
+            # Column 1: Ground Truth (right)
+            ax_gt = axes[row_idx, 1]
+            ax_gt.set_extent(extent, crs=projection)
+            im_gt = ax_gt.imshow(
+                target,
+                cmap="RdYlBu_r",
+                vmin=vmin,
+                vmax=vmax,
+                extent=extent,
+                origin="upper",
+                transform=projection,
+            )
+            ax_gt.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')
             ax_gt.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
             ax_gt.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
             gl_gt = ax_gt.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
@@ -288,63 +315,38 @@ class HRESVisualizationCallback(L.Callback):
             ax_gt.set_title(f"Ground Truth ({var_name})")
             plt.colorbar(im_gt, ax=ax_gt, fraction=0.046, pad=0.04, orientation='horizontal')
             
-            # Reconstruction
-            ax_pred = axes[row_idx, 1]
-            ax_pred.set_extent(extent, crs=projection)
-            im_pred = ax_pred.imshow(
-                pred,
-                cmap="RdYlBu_r",  # Standard colormap for temperature
-                vmin=vmin,
-                vmax=vmax,
+            # Column 2: Error (always shown)
+            ax_err = axes[row_idx, 2]
+            ax_err.set_extent(extent, crs=projection)
+            error_max = np.abs(diff).max()
+            im_err = ax_err.imshow(
+                diff,
+                cmap="RdBu_r",  # Diverging: blue=negative error, red=positive error
+                vmin=-error_max,
+                vmax=error_max,
                 extent=extent,
                 origin="upper",
                 transform=projection,
             )
-            ax_pred.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')  # Standard land opacity
-            ax_pred.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-            ax_pred.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
-            gl_pred = ax_pred.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
-            gl_pred.top_labels = False
-            gl_pred.right_labels = False
-            ax_pred.set_title(f"Reconstruction ({var_name})")
-            plt.colorbar(im_pred, ax=ax_pred, fraction=0.046, pad=0.04, orientation='horizontal')
+            ax_err.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')
+            ax_err.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+            ax_err.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+            gl_err = ax_err.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
+            gl_err.top_labels = False
+            gl_err.right_labels = False
+            ax_err.set_title(f"Error ({var_name})\nRMSE={rmse:.4f}, MAE={mae:.4f}")
+            plt.colorbar(im_err, ax=ax_err, fraction=0.046, pad=0.04, orientation='horizontal')
             
-            # Compute metrics for this variable
-            diff = pred - target
-            rmse = np.sqrt(np.mean(diff ** 2))
-            mae = np.mean(np.abs(diff))
             
-            # If uncertainty is available, add error and uncertainty columns
+            # Column 3: Uncertainty (only when using likelihood)
             if uncertainty_data is not None:
-                # Error (Prediction - Ground Truth)
-                ax_err = axes[row_idx, 2]
-                ax_err.set_extent(extent, crs=projection)
-                
-                # Use diverging colormap for error
-                error_max = np.abs(diff).max()
-                im_err = ax_err.imshow(
-                    diff,
-                    cmap="RdBu_r",  # Diverging: blue=negative error, red=positive error
-                    vmin=-error_max,
-                    vmax=error_max,
-                    extent=extent,
-                    origin="upper",
-                    transform=projection,
-                )
-                ax_err.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')
-                ax_err.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-                ax_err.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
-                gl_err = ax_err.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
-                gl_err.top_labels = False
-                gl_err.right_labels = False
-                ax_err.set_title(f"Error ({var_name})")
-                plt.colorbar(im_err, ax=ax_err, fraction=0.046, pad=0.04, orientation='horizontal')
-                
-                # Uncertainty (Standard Deviation)
                 ax_unc = axes[row_idx, 3]
                 ax_unc.set_extent(extent, crs=projection)
                 
                 unc = uncertainty_data[row_idx]
+                unc_mean = unc.mean()
+                unc_std = unc.std()
+                
                 im_unc = ax_unc.imshow(
                     unc,
                     cmap="viridis",  # Perceptually uniform colormap for uncertainty
@@ -360,24 +362,8 @@ class HRESVisualizationCallback(L.Callback):
                 gl_unc = ax_unc.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
                 gl_unc.top_labels = False
                 gl_unc.right_labels = False
-                ax_unc.set_title(f"Uncertainty ({var_name})")
+                ax_unc.set_title(f"Uncertainty ({var_name})\nmean={unc_mean:.4f}, std={unc_std:.4f}")
                 plt.colorbar(im_unc, ax=ax_unc, fraction=0.046, pad=0.04, orientation='horizontal')
-                
-                # Add uncertainty statistics to metrics
-                unc_mean = unc.mean()
-                unc_max = unc.max()
-                fig.text(
-                    0.5, 1.0 - (row_idx + 0.5) / num_vars,
-                    f"{var_name}: RMSE={rmse:.4f}, MAE={mae:.4f}, Unc_mean={unc_mean:.4f}, Unc_max={unc_max:.4f}",
-                    ha='center', va='bottom', fontsize=10, fontweight='bold'
-                )
-            else:
-                # No uncertainty - just show basic metrics
-                fig.text(
-                    0.5, 1.0 - (row_idx + 0.5) / num_vars,
-                    f"{var_name}: RMSE={rmse:.4f}, MAE={mae:.4f}",
-                    ha='center', va='bottom', fontsize=10, fontweight='bold'
-                )
         
         # Add overall title
         fig.suptitle(

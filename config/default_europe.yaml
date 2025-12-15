@@ -24,6 +24,9 @@ model:
   # Decoder
   decoder_type: knn_cross
   num_decoder_layers: 1
+  k_nearest: 9                        # 3x3 neighbors for analytical grid KNN
+  use_gridded_knn: true               # Use fast analytical KNN for regular grids
+  roll_lon: false                     # Longitude wraparound (set true for global models)
   
   # Position encoding
   use_rope: false
@@ -57,14 +60,14 @@ data:
   
   # Query sampling - number of HRES points to sample per timestep
   # Full Europe has ~3200 latent tokens (vs 375 for Scandinavia) - reduce samples to fit in memory
-  num_query_samples: 8192
+  num_query_samples: 4096
   
   # Train/val split
   val_months: 3                       # Reduced for partial data
   # val_months: 3                     # Use 3 months for full dataset
   
   # DataLoader - reduced batch size for full Europe (8.5x more latent tokens)
-  batch_size: 32
+  batch_size: 16
   num_workers: 7
   pin_memory: true
   normalize_coords: true

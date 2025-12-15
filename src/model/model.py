@@ -29,6 +29,9 @@ class NeuralFieldSuperRes(nn.Module):
         num_auxiliary_features: int = 0,  # 0 = disabled
         pos_init_std: float = 0.02,  # For CrossAttention position encoding
         predict_variance: bool = False,  # If True, output both mean and log-variance
+        k_nearest: int = 16,  # Number of nearest neighbors for cross-attention
+        use_gridded_knn: bool = False,  # Use analytical KNN for regular grids
+        roll_lon: bool = False,  # Longitude wraparound for global models
     ):
         super().__init__()
         self.num_output_features = num_output_features
@@ -44,6 +47,9 @@ class NeuralFieldSuperRes(nn.Module):
         self.num_auxiliary_features = num_auxiliary_features
         self.pos_init_std = pos_init_std
         self.predict_variance = predict_variance
+        self.k_nearest = k_nearest
+        self.use_gridded_knn = use_gridded_knn
+        self.roll_lon = roll_lon
         
         # If auxiliary features exist, project them to hidden_dim
         if num_auxiliary_features > 0:
@@ -73,6 +79,9 @@ class NeuralFieldSuperRes(nn.Module):
                         coord_dim=coord_dim,
                         pos_init_std=self.pos_init_std,
                         positional_information_type="rope" if use_rope else "rff",
+                        k_nearest=k_nearest,
+                        use_gridded_knn=use_gridded_knn,
+                        roll_lon=roll_lon,
                     )
                 )
 
@@ -89,6 +98,7 @@ class NeuralFieldSuperRes(nn.Module):
         latents: torch.Tensor,
         latent_pos: torch.Tensor,
         query_auxiliary_features: Optional[torch.Tensor] = None,
+        latent_grid_shape: Optional[torch.Tensor] = None,  # [2] for analytical KNN
     ) -> torch.Tensor:
         """
         Forward pass (decoder-only mode).
@@ -98,6 +108,7 @@ class NeuralFieldSuperRes(nn.Module):
             latents: [B, Z, D_latent] latent features from Aurora encoder
             latent_pos: [B, Z, coord_dim] latent positions
             query_auxiliary_features: [B, Q, num_aux] optional auxiliary features (z, lsm, slt)
+            latent_grid_shape: [2] tensor (num_lat, num_lon) for analytical KNN
         
         Returns:
             predictions: [B, Q, num_output_features] predicted field values
@@ -122,7 +133,8 @@ class NeuralFieldSuperRes(nn.Module):
                 query=query_hidden,
                 query_pos=query_pos,
                 context=latents,
-                context_pos=latent_pos
+                context_pos=latent_pos,
+                context_grid_shape=latent_grid_shape,
             )
             query_hidden = query_hidden + delta
 

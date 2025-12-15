@@ -228,10 +228,10 @@ class EraLatentHresDataset(Dataset):
             else:
                 raise ValueError(f"Statistics not found for variable {var}")
         
-        #NOTE: print to be sure
-        print(f"Loaded target statistics from {stats_path}")
-        for var in self.variables:
-            print(f"  {var}: mean={self.target_mean[var]:.2f}, std={self.target_std[var]:.2f}")
+        # NOTE: print to be sure
+        # print(f"Loaded target statistics from {stats_path}")
+        # for var in self.variables:
+        #     print(f"  {var}: mean={self.target_mean[var]:.2f}, std={self.target_std[var]:.2f}")
         
         # Load statistics for static variables if using static features
         if self.use_static_features:
@@ -257,10 +257,10 @@ class EraLatentHresDataset(Dataset):
                     f"Please create this file with mean/std for {self.static_variables} or set use_static_features=false."
                 )
         
-        #NOTE: print to be sure
-        print(f"Loaded static feature statistics:")
-        for var in self.static_mean.keys():
-            print(f"  {var}: mean={self.static_mean[var]:.2f}, std={self.static_std[var]:.2f}")
+        # NOTE: print to be sure
+        # print(f"Loaded static feature statistics:")
+        # for var in self.static_mean.keys():
+        #     print(f"  {var}: mean={self.static_mean[var]:.2f}, std={self.static_std[var]:.2f}")
 
     def _compute_bounds(self):
         """Compute lat/lon bounds for normalization based on latent grid coverage."""
@@ -300,7 +300,7 @@ class EraLatentHresDataset(Dataset):
         if self.static_zarr_path is None:
             raise ValueError("static_zarr_path must be specified when use_static_features=True")
         
-        print(f"Loading static features from {self.static_zarr_path}...")
+        # print(f"Loading static features from {self.static_zarr_path}...")
         static_ds = xr.open_zarr(self.static_zarr_path, consolidated=True)
         
         # Check both data_vars and coordinates for static variables
@@ -345,22 +345,23 @@ class EraLatentHresDataset(Dataset):
                     )
                 
                 data = (data - self.static_mean[var]) / std_val
-                print(f"  {var}: normalized (mean={self.static_mean[var]:.2f}, std={std_val:.2f})")
-            else:
-                print(f"  {var}: NOT normalized")
+                # print(f"  {var}: normalized (mean={self.static_mean[var]:.2f}, std={std_val:.2f})")
+            # else:
+                # print(f"  {var}: NOT normalized")
             
             features.append(data)
         
         self.static_features = np.stack(features, axis=-1)
-        print(f"  Loaded static features: {available}, shape={self.static_features.shape}")
+        # print(f"  Loaded static features: {available}, shape={self.static_features.shape}")
     
     def _print_info(self):
         """Print dataset info."""
-        print(f"EraLatentHresDataset: {self.split_info}")
-        print(f"  Latent: ({len(self.latent_lat)}, {len(self.latent_lon)})")
-        print(f"  HRES: ({len(self.hres_lat)}, {len(self.hres_lon)})")
-        print(f"  Variables: {self.variables}")
-        print(f"  Samples: {len(self)}")
+        pass  # Disabled verbose output
+        # print(f"EraLatentHresDataset: {self.split_info}")
+        # print(f"  Latent: ({len(self.latent_lat)}, {len(self.latent_lon)})")
+        # print(f"  HRES: ({len(self.hres_lat)}, {len(self.hres_lon)})")
+        # print(f"  Variables: {self.variables}")
+        # print(f"  Samples: {len(self)}")
     
     def __len__(self) -> int:
         return len(self.time_indices)
@@ -449,6 +450,8 @@ class EraLatentHresDataset(Dataset):
             'latent_pos': torch.from_numpy(latent_pos).float(),
             'query_pos': torch.from_numpy(query_pos).float(),
             'query_fields': torch.from_numpy(query_fields).float(),
+            # Grid metadata for analytical KNN (avoids torch.cdist)
+            'latent_grid_shape': torch.tensor([len(self.latent_lat), len(self.latent_lon)], dtype=torch.long),
         }
         
         if aux_feats is not None:

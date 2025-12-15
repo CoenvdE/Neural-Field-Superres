@@ -47,6 +47,11 @@ class NeuralFieldSuperResModule(L.LightningModule):
         use_rope: bool = False,
         pos_init_std: float = 0.02,  # For CrossAttention position encoding
         
+        # KNN cross-attention
+        k_nearest: int = 16,  # Number of nearest neighbors for cross-attention
+        use_gridded_knn: bool = False,  # Use analytical KNN for regular grids
+        roll_lon: bool = False,  # Longitude wraparound for global models
+        
         # Auxiliary features (optional, e.g., z/lsm/slt)
         num_auxiliary_features: int = 0,  # 0 = disabled, 3 = z/lsm/slt
         
@@ -95,6 +100,9 @@ class NeuralFieldSuperResModule(L.LightningModule):
             pos_init_std=pos_init_std,
             num_auxiliary_features=num_auxiliary_features,
             predict_variance=predict_variance,
+            k_nearest=k_nearest,
+            use_gridded_knn=use_gridded_knn,
+            roll_lon=roll_lon,
         )
         
         # Loss function and likelihood
@@ -123,6 +131,7 @@ class NeuralFieldSuperResModule(L.LightningModule):
         latents: torch.Tensor,
         latent_pos: torch.Tensor,
         query_auxiliary_features: Optional[torch.Tensor] = None,
+        latent_grid_shape: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Forward pass through the model."""
         return self.model(
@@ -130,6 +139,7 @@ class NeuralFieldSuperResModule(L.LightningModule):
             latents=latents,
             latent_pos=latent_pos,
             query_auxiliary_features=query_auxiliary_features,
+            latent_grid_shape=latent_grid_shape,
         )
     
     @torch.no_grad()
@@ -139,6 +149,7 @@ class NeuralFieldSuperResModule(L.LightningModule):
         latents: torch.Tensor,
         latent_pos: torch.Tensor,
         query_auxiliary_features: Optional[torch.Tensor] = None,
+        latent_grid_shape: Optional[torch.Tensor] = None,
         chunk_size: int = 8192,
     ) -> torch.Tensor:
         """
@@ -152,6 +163,7 @@ class NeuralFieldSuperResModule(L.LightningModule):
             latents: [B, Z, D] latent embeddings
             latent_pos: [B, Z, coord_dim] latent positions
             query_auxiliary_features: [B, Q, num_aux] optional auxiliary features
+            latent_grid_shape: [2] tensor (num_lat, num_lon) for analytical KNN
             chunk_size: number of query points to process at once (default 8192)
             
         Returns:
@@ -179,6 +191,7 @@ class NeuralFieldSuperResModule(L.LightningModule):
                 latents=latents,
                 latent_pos=latent_pos,
                 query_auxiliary_features=chunk_aux,
+                latent_grid_shape=latent_grid_shape,
             )
             predictions_list.append(chunk_pred)
         
@@ -200,12 +213,18 @@ class NeuralFieldSuperResModule(L.LightningModule):
         # Optional auxiliary features (None if not in batch)
         query_auxiliary_features = batch.get("query_auxiliary_features")  # [B, Q, num_aux] or None
         
+        # Grid metadata for analytical KNN (use first sample, same for whole batch)
+        latent_grid_shape = batch.get("latent_grid_shape")  # [B, 2] or None
+        if latent_grid_shape is not None:
+            latent_grid_shape = latent_grid_shape[0]  # [2] - same for all samples
+        
         # Forward pass
         predictions = self.model(
             query_pos=query_pos,
             latents=latents,
             latent_pos=latent_pos,
             query_auxiliary_features=query_auxiliary_features,
+            latent_grid_shape=latent_grid_shape,
         )
         
         # Compute loss against ground truth
