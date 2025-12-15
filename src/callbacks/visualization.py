@@ -3,6 +3,7 @@ HRES Visualization Callback for training monitoring.
 
 Generates side-by-side visualizations of ground truth and predicted HRES fields
 during training, using cartopy for geographic projection with land mask overlay.
+Supports uncertainty visualization when using likelihood-based loss functions.
 """
 
 import torch
@@ -11,70 +12,39 @@ import lightning as L
 from lightning.pytorch.loggers import WandbLogger
 from typing import Optional, List, Tuple, Dict
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from io import BytesIO
-from PIL import Image
+import wandb
 
-# Try to import cartopy (optional but recommended)
-try:
-    import cartopy.crs as ccrs
-    import cartopy.feature as cfeature
-    HAS_CARTOPY = True
-except ImportError:
-    HAS_CARTOPY = False
-    print("Warning: cartopy not installed. Geographic visualization will use basic imshow.")
-
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+from .likelihoods import GaussianLikelihood, HeteroscedasticGaussianLikelihood
 
 class HRESVisualizationCallback(L.Callback):
     """
     Callback to visualize HRES predictions during validation.
     
-    Creates side-by-side plots of:
-    - Ground truth HRES field
-    - Predicted HRES field  
-    - Difference (error) map
+    Visualizes 1 sample with all variables in the dataset, showing:
+    - Ground truth HRES field for each variable
+    - Predicted HRES field for each variable
     
-    Uses cartopy for proper geographic projection with land mask overlay.
-    Logs visualizations to WandB as images.
+    Always uses cartopy for geographic projection with land mask overlay.
+    Static/auxiliary features are visualized once on the first validation epoch.
+    Logs all visualizations to WandB as images.
     """
     
     def __init__(
         self,
         log_every_n_epochs: int = 5,
-        num_samples: int = 4,
-        variable_name: str = "2t",
-        colormap: str = "RdYlBu_r",  # Good for temperature
-        error_colormap: str = "RdBu_r",
-        figsize: Tuple[int, int] = (18, 5),
-        dpi: int = 100,
-        land_alpha: float = 0.3,  # Opacity of land mask
-        use_cartopy: bool = True,  # Set to False to disable cartopy
-        plot_auxiliary_features: bool = True,  # Plot static/auxiliary features
+        chunk_size: int = 8192,
     ):
         """
         Args:
             log_every_n_epochs: Frequency of visualization logging.
-            num_samples: Number of samples to visualize per epoch.
-            variable_name: Name of the variable being visualized (for title).
-            colormap: Matplotlib colormap for field values.
-            error_colormap: Colormap for error/difference maps.
-            figsize: Figure size (width, height) in inches.
-            dpi: Figure DPI.
-            land_alpha: Opacity of land mask overlay (0-1).
-            use_cartopy: Whether to use cartopy for geographic projection.
-            plot_auxiliary_features: Whether to plot auxiliary/static features.
+            chunk_size: Chunk size for memory-efficient inference on full grid.
         """
         super().__init__()
         self.log_every_n_epochs = log_every_n_epochs
-        self.num_samples = num_samples
-        self.variable_name = variable_name
-        self.colormap = colormap
-        self.error_colormap = error_colormap
-        self.figsize = figsize
-        self.dpi = dpi
-        self.land_alpha = land_alpha
-        self.use_cartopy = use_cartopy and HAS_CARTOPY
-        self.plot_auxiliary_features = plot_auxiliary_features
+        self.chunk_size = chunk_size
+        self.static_features_plotted = False  # Track if static features have been plotted
         
     def on_validation_epoch_end(
         self, 
@@ -91,340 +61,335 @@ class HRESVisualizationCallback(L.Callback):
         # Get WandB logger
         wandb_logger = self._get_wandb_logger(trainer)
         if wandb_logger is None:
-            return
+            raise ValueError("WandB logger is None")
         
         # Get datamodule for full-grid access
         if trainer.datamodule is None:
-            return
+            raise ValueError("Trainer datamodule is None")
         
         # Get HRES grid info
         hres_shape = self._get_hres_shape(trainer)
         geo_bounds = self._get_geo_bounds(trainer)
         
         if hres_shape is None:
-            return
+            raise ValueError("HRES shape is None")
+        
+        if geo_bounds is None:
+            raise ValueError("Geographic bounds are None - dataset not properly initialized")
         
         # Get the validation dataset for full-grid samples
         val_dataset = trainer.datamodule.val_dataset
         if val_dataset is None:
-            return
+            raise ValueError("Validation dataset is None")
         
         # Store original num_query_samples and temporarily disable subsampling
         original_num_query_samples = val_dataset.num_query_samples
         val_dataset.num_query_samples = None  # Use full grid
-        
         device = pl_module.device
-        images = []
-        
+
         try:
-            # Generate visualizations for a few samples
-            for sample_idx in range(min(self.num_samples, len(val_dataset))):
-                sample = val_dataset[sample_idx]
+            # Only visualize 1 sample (first sample)
+            sample_idx = 0
+            sample = val_dataset[sample_idx]
+            
+            # Move to device and add batch dimension
+            latents = sample['latents'].unsqueeze(0).to(device)          # [1, Z, D]
+            latent_pos = sample['latent_pos'].unsqueeze(0).to(device)    # [1, Z, 2]
+            query_pos = sample['query_pos'].unsqueeze(0).to(device)      # [1, Q, 2]
+            query_fields = sample['query_fields'].unsqueeze(0)            # [1, Q, V]
+            
+            # Optional auxiliary features
+            query_aux = None
+            if 'query_auxiliary_features' in sample:
+                query_aux = sample['query_auxiliary_features'].unsqueeze(0).to(device)
+            
+            # Use chunked inference for full grid (memory-efficient)
+            # Lightning handles precision (bf16-mixed) automatically based on trainer config
+            predictions = pl_module.chunked_forward(
+                query_pos=query_pos,
+                latents=latents,
+                latent_pos=latent_pos,
+                query_auxiliary_features=query_aux,
+                chunk_size=self.chunk_size,
+            )
+            
+            # Extract uncertainty if using likelihood functions
+            uncertainty = None
+            if pl_module.likelihood is not None:
+                if isinstance(pl_module.likelihood, HeteroscedasticGaussianLikelihood):
+                    # Extract variance from predictions (heteroscedastic)
+                    pred_dist = pl_module.likelihood(predictions)
+                    uncertainty = pred_dist.stddev  # [B, Q, V]
+                elif isinstance(pl_module.likelihood, GaussianLikelihood):
+                    # Uniform noise (homoscedastic)
+                    uncertainty = torch.full_like(predictions, pl_module.likelihood.noise.item())
                 
-                # Move to device and add batch dimension
-                latents = sample['latents'].unsqueeze(0).to(device)          # [1, Z, D]
-                latent_pos = sample['latent_pos'].unsqueeze(0).to(device)    # [1, Z, 2]
-                query_pos = sample['query_pos'].unsqueeze(0).to(device)      # [1, Q, 2]
-                query_fields = sample['query_fields'].unsqueeze(0)            # [1, Q, V]
-                
-                # Optional auxiliary features
-                query_aux = None
-                if 'query_auxiliary_features' in sample:
-                    query_aux = sample['query_auxiliary_features'].unsqueeze(0).to(device)
-                
-                # Use chunked inference for full grid (memory-efficient)
-                with torch.amp.autocast(device_type=device.type if device.type != 'cpu' else 'cpu', 
-                                        enabled=device.type == 'cuda'):
-                    predictions = pl_module.chunked_forward(
-                        query_pos=query_pos,
-                        latents=latents,
-                        latent_pos=latent_pos,
-                        query_auxiliary_features=query_aux,
-                        chunk_size=8192,
-                    )
+                # Extract mean predictions from distribution
+                pred_dist = pl_module.likelihood(predictions)
+                predictions = pred_dist.mean
+            
+            # Automatically determine all variables from query_fields shape
+            num_vars = query_fields.shape[-1]
+            
+            # Get variable names from datamodule if available
+            if hasattr(trainer.datamodule, 'target_variables'):
+                variable_names = trainer.datamodule.target_variables
+            else:
+                # Fallback to generic names
+                variable_names = [f"var_{i}" for i in range(num_vars)]
+            
+            var_data = []  # List of (target_2d, pred_2d, var_name) tuples
+            uncertainty_data = []  # List of uncertainty_2d arrays (if available)
+            
+            for var_idx in range(num_vars):
+                var_name = variable_names[var_idx] if var_idx < len(variable_names) else f"var_{var_idx}"
                 
                 # Move to CPU for visualization
-                pred = predictions[0, :, 0].cpu().numpy()    # [Q] - first variable
-                target = query_fields[0, :, 0].numpy()       # [Q]
+                pred = predictions[0, :, var_idx].cpu().numpy()    # [Q]
+                target = query_fields[0, :, var_idx].numpy()       # [Q]
                 
                 # Denormalize predictions and targets back to original scale
                 if hasattr(trainer.datamodule, 'denormalize_targets'):
-                    var_idx = 0  # First variable
                     pred = trainer.datamodule.denormalize_targets(
                         torch.from_numpy(pred).unsqueeze(-1), var_idx
                     ).squeeze(-1).numpy()
                     target = trainer.datamodule.denormalize_targets(
                         torch.from_numpy(target).unsqueeze(-1), var_idx
                     ).squeeze(-1).numpy()
+                else:
+                    raise ValueError("Denormalize targets not implemented for this datamodule")
+                
+                # Process uncertainty if available
+                if uncertainty is not None:
+                    unc = uncertainty[0, :, var_idx].cpu().numpy()  # [Q]
+                    # Denormalize uncertainty: multiply by variable std
+                    if hasattr(trainer.datamodule, 'target_statistics'):
+                        var_std = trainer.datamodule.target_statistics[var_idx]['std']
+                        unc = unc * var_std
+                    uncertainty_data.append(unc)
                 
                 # Reshape to 2D grid
                 try:
                     pred_2d = pred.reshape(hres_shape)
                     target_2d = target.reshape(hres_shape)
+                    var_data.append((target_2d, pred_2d, var_name))
                 except ValueError:
-                    continue
-                
-                # Create figure
-                fig = self._create_comparison_figure(
-                    target_2d, 
-                    pred_2d, 
+                    raise ValueError("Failed to reshape predictions and targets to 2D grid in visualization callback")
+            
+            # Reshape uncertainty to 2D
+            if uncertainty_data:
+                uncertainty_data_2d = [unc.reshape(hres_shape) for unc in uncertainty_data]
+            else:
+                uncertainty_data_2d = None
+            
+            # Create multi-variable figure
+            if var_data:
+                fig = self._create_multi_var_cartopy_figure(
+                    var_data,
                     geo_bounds=geo_bounds,
                     sample_idx=sample_idx,
                     epoch=trainer.current_epoch,
+                    uncertainty_data=uncertainty_data_2d,
                 )
                 
-                # Convert to image
-                img = self._fig_to_image(fig)
-                images.append(img)
+                # Log to WandB via PyTorch Lightning logger
+                pl_module.logger.log_image(
+                    key="val/hres_predictions",
+                    images=[fig]
+                )
                 plt.close(fig)
+            
+            # Plot auxiliary features only once (on first call)
+            if not self.static_features_plotted and hasattr(val_dataset, 'static_features') and val_dataset.static_features is not None:
+                aux_fig = self._create_auxiliary_figure(
+                    val_dataset.static_features,
+                    val_dataset.static_variables if hasattr(val_dataset, 'static_variables') else ['z', 'lsm', 'slt'],
+                    hres_shape,
+                    geo_bounds,
+                    trainer.current_epoch,
+                )
+                if aux_fig is not None:
+                    # Log to WandB via PyTorch Lightning logger
+                    pl_module.logger.log_image(
+                        key="val/auxiliary_features",
+                        images=[aux_fig]
+                    )
+                    plt.close(aux_fig)
+                    self.static_features_plotted = True  # Mark as plotted
+                else:
+                    raise ValueError("Static features not found in validation dataset")
                 
         finally:
             # Restore original setting
             val_dataset.num_query_samples = original_num_query_samples
-        
-        # Log to WandB
-        if images:
-            import wandb
-            wandb_logger.experiment.log({
-                f"val/hres_predictions": [
-                    wandb.Image(img, caption=f"Sample {i}") 
-                    for i, img in enumerate(images)
-                ],
-                "epoch": trainer.current_epoch,
-            })
-        
-        # Plot auxiliary features (once per validation, not per sample)
-        if self.plot_auxiliary_features and hasattr(val_dataset, 'static_features') and val_dataset.static_features is not None:
-            aux_fig = self._create_auxiliary_figure(
-                val_dataset.static_features,
-                val_dataset.static_variables if hasattr(val_dataset, 'static_variables') else ['z', 'lsm', 'slt'],
-                hres_shape,
-                geo_bounds,
-                trainer.current_epoch,
-            )
-            if aux_fig is not None:
-                aux_img = self._fig_to_image(aux_fig)
-                plt.close(aux_fig)
-                wandb_logger.experiment.log({
-                    "val/auxiliary_features": wandb.Image(aux_img, caption="Static/Auxiliary Features"),
-                    "epoch": trainer.current_epoch,
-                })
     
-    def _create_comparison_figure(
+    def _create_multi_var_cartopy_figure(
         self,
-        target: np.ndarray,
-        prediction: np.ndarray,
-        geo_bounds: Optional[Dict[str, float]],
-        sample_idx: int,
-        epoch: int,
-    ) -> plt.Figure:
-        """Create a side-by-side comparison figure with geographic context."""
-        
-        # Compute common color scale
-        vmin = min(target.min(), prediction.min())
-        vmax = max(target.max(), prediction.max())
-        
-        # Compute error
-        diff = prediction - target
-        err_max = max(abs(diff.min()), abs(diff.max()))
-        
-        # Create figure with or without cartopy
-        if self.use_cartopy and geo_bounds is not None:
-            fig = self._create_cartopy_figure(
-                target, prediction, diff,
-                geo_bounds, vmin, vmax, err_max,
-                sample_idx, epoch
-            )
-        else:
-            fig = self._create_basic_figure(
-                target, prediction, diff,
-                geo_bounds, vmin, vmax, err_max,
-                sample_idx, epoch
-            )
-        
-        return fig
-    
-    def _create_cartopy_figure(
-        self,
-        target: np.ndarray,
-        prediction: np.ndarray,
-        diff: np.ndarray,
+        var_data: List[Tuple[np.ndarray, np.ndarray, str]],
         geo_bounds: Dict[str, float],
-        vmin: float, vmax: float, err_max: float,
         sample_idx: int,
         epoch: int,
+        uncertainty_data: Optional[List[np.ndarray]] = None,
     ) -> plt.Figure:
-        """Create figure using cartopy for geographic projection."""
+        """Create multi-variable figure using cartopy.
+        
+        When uncertainty_data is provided, creates 4 columns: GT, Pred, Error, Uncertainty.
+        Otherwise creates 2 columns: GT, Pred.
+        """
+        num_vars = len(var_data)
+        
         # Extract bounds
         lon_min = geo_bounds["lon_min"]
         lon_max = geo_bounds["lon_max"]
         lat_min = geo_bounds["lat_min"]
         lat_max = geo_bounds["lat_max"]
-        
-        # Create extent for imshow [lon_min, lon_max, lat_min, lat_max]
         extent = [lon_min, lon_max, lat_min, lat_max]
         
-        # Create figure with PlateCarree projection
+        # Determine number of columns (2 for MSE, 4 for likelihood)
+        num_cols = 4 if uncertainty_data is not None else 2
+        
+        # Create figure
         projection = ccrs.PlateCarree()
         fig, axes = plt.subplots(
-            1, 3, 
-            figsize=self.figsize, 
-            dpi=self.dpi,
+            num_vars, num_cols,
+            figsize=(6 * num_cols, 5 * num_vars),
+            dpi=100,  # Standard DPI
             subplot_kw={'projection': projection}
         )
         
-        # Plot data and add features to each axis
-        data_list = [target, prediction, diff]
-        titles = [
-            f"Ground Truth ({self.variable_name})",
-            f"Prediction ({self.variable_name})",
-            "Error (Pred - GT)"
-        ]
-        cmaps = [self.colormap, self.colormap, self.error_colormap]
-        vmins = [vmin, vmin, -err_max]
-        vmaxs = [vmax, vmax, err_max]
+        # Handle single variable case (axes won't be 2D)
+        if num_vars == 1:
+            axes = axes.reshape(1, -1)
         
-        for ax, data, title, cmap, v_min, v_max in zip(
-            axes, data_list, titles, cmaps, vmins, vmaxs
-        ):
-            # Set extent
-            ax.set_extent(extent, crs=projection)
+        # Plot each variable
+        for row_idx, (target, pred, var_name) in enumerate(var_data):
+            # Compute common color scale for this variable
+            vmin = min(target.min(), pred.min())
+            vmax = max(target.max(), pred.max())
             
-            # Plot data
-            im = ax.imshow(
-                data,
-                cmap=cmap,
-                vmin=v_min,
-                vmax=v_max,
+            # Ground Truth
+            ax_gt = axes[row_idx, 0]
+            ax_gt.set_extent(extent, crs=projection)
+            im_gt = ax_gt.imshow(
+                target,
+                cmap="RdYlBu_r",  # Standard colormap for temperature
+                vmin=vmin,
+                vmax=vmax,
                 extent=extent,
                 origin="upper",
                 transform=projection,
             )
+            ax_gt.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')  # Standard land opacity
+            ax_gt.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+            ax_gt.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+            gl_gt = ax_gt.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
+            gl_gt.top_labels = False
+            gl_gt.right_labels = False
+            ax_gt.set_title(f"Ground Truth ({var_name})")
+            plt.colorbar(im_gt, ax=ax_gt, fraction=0.046, pad=0.04, orientation='horizontal')
             
-            # Add land/ocean features
-            ax.add_feature(cfeature.LAND, alpha=self.land_alpha, facecolor='darkgray')
-            ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-            ax.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+            # Reconstruction
+            ax_pred = axes[row_idx, 1]
+            ax_pred.set_extent(extent, crs=projection)
+            im_pred = ax_pred.imshow(
+                pred,
+                cmap="RdYlBu_r",  # Standard colormap for temperature
+                vmin=vmin,
+                vmax=vmax,
+                extent=extent,
+                origin="upper",
+                transform=projection,
+            )
+            ax_pred.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')  # Standard land opacity
+            ax_pred.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+            ax_pred.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+            gl_pred = ax_pred.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
+            gl_pred.top_labels = False
+            gl_pred.right_labels = False
+            ax_pred.set_title(f"Reconstruction ({var_name})")
+            plt.colorbar(im_pred, ax=ax_pred, fraction=0.046, pad=0.04, orientation='horizontal')
             
-            # Add gridlines
-            gl = ax.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
-            gl.top_labels = False
-            gl.right_labels = False
+            # Compute metrics for this variable
+            diff = pred - target
+            rmse = np.sqrt(np.mean(diff ** 2))
+            mae = np.mean(np.abs(diff))
             
-            ax.set_title(title)
-            
-            # Colorbar
-            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, orientation='horizontal')
+            # If uncertainty is available, add error and uncertainty columns
+            if uncertainty_data is not None:
+                # Error (Prediction - Ground Truth)
+                ax_err = axes[row_idx, 2]
+                ax_err.set_extent(extent, crs=projection)
+                
+                # Use diverging colormap for error
+                error_max = np.abs(diff).max()
+                im_err = ax_err.imshow(
+                    diff,
+                    cmap="RdBu_r",  # Diverging: blue=negative error, red=positive error
+                    vmin=-error_max,
+                    vmax=error_max,
+                    extent=extent,
+                    origin="upper",
+                    transform=projection,
+                )
+                ax_err.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')
+                ax_err.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+                ax_err.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+                gl_err = ax_err.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
+                gl_err.top_labels = False
+                gl_err.right_labels = False
+                ax_err.set_title(f"Error ({var_name})")
+                plt.colorbar(im_err, ax=ax_err, fraction=0.046, pad=0.04, orientation='horizontal')
+                
+                # Uncertainty (Standard Deviation)
+                ax_unc = axes[row_idx, 3]
+                ax_unc.set_extent(extent, crs=projection)
+                
+                unc = uncertainty_data[row_idx]
+                im_unc = ax_unc.imshow(
+                    unc,
+                    cmap="viridis",  # Perceptually uniform colormap for uncertainty
+                    vmin=0,
+                    vmax=unc.max(),
+                    extent=extent,
+                    origin="upper",
+                    transform=projection,
+                )
+                ax_unc.add_feature(cfeature.LAND, alpha=0.3, facecolor='darkgray')
+                ax_unc.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+                ax_unc.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+                gl_unc = ax_unc.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
+                gl_unc.top_labels = False
+                gl_unc.right_labels = False
+                ax_unc.set_title(f"Uncertainty ({var_name})")
+                plt.colorbar(im_unc, ax=ax_unc, fraction=0.046, pad=0.04, orientation='horizontal')
+                
+                # Add uncertainty statistics to metrics
+                unc_mean = unc.mean()
+                unc_max = unc.max()
+                fig.text(
+                    0.5, 1.0 - (row_idx + 0.5) / num_vars,
+                    f"{var_name}: RMSE={rmse:.4f}, MAE={mae:.4f}, Unc_mean={unc_mean:.4f}, Unc_max={unc_max:.4f}",
+                    ha='center', va='bottom', fontsize=10, fontweight='bold'
+                )
+            else:
+                # No uncertainty - just show basic metrics
+                fig.text(
+                    0.5, 1.0 - (row_idx + 0.5) / num_vars,
+                    f"{var_name}: RMSE={rmse:.4f}, MAE={mae:.4f}",
+                    ha='center', va='bottom', fontsize=10, fontweight='bold'
+                )
         
-        # Add metrics to suptitle
-        rmse = np.sqrt(np.mean(diff ** 2))
-        mae = np.mean(np.abs(diff))
+        # Add overall title
         fig.suptitle(
             f"Epoch {epoch + 1} | Sample {sample_idx} | "
-            f"Region: ({lat_min:.1f}°N to {lat_max:.1f}°N, {lon_min:.1f}°E to {lon_max:.1f}°E) | "
-            f"RMSE: {rmse:.4f} | MAE: {mae:.4f}",
-            fontsize=11,
-            fontweight="bold",
-        )
-        
-        plt.tight_layout()
-        return fig
-    
-    def _create_basic_figure(
-        self,
-        target: np.ndarray,
-        prediction: np.ndarray,
-        diff: np.ndarray,
-        geo_bounds: Optional[Dict[str, float]],
-        vmin: float, vmax: float, err_max: float,
-        sample_idx: int,
-        epoch: int,
-    ) -> plt.Figure:
-        """Create basic figure without cartopy (fallback)."""
-        fig, axes = plt.subplots(1, 3, figsize=self.figsize, dpi=self.dpi)
-        
-        # Determine extent if geo_bounds available
-        if geo_bounds:
-            extent = [
-                geo_bounds["lon_min"], geo_bounds["lon_max"],
-                geo_bounds["lat_min"], geo_bounds["lat_max"]
-            ]
-        else:
-            extent = None
-        
-        # Ground truth
-        im0 = axes[0].imshow(
-            target, 
-            cmap=self.colormap, 
-            vmin=vmin, 
-            vmax=vmax,
-            aspect="auto",
-            origin="upper",
-            extent=extent,
-        )
-        axes[0].set_title(f"Ground Truth ({self.variable_name})")
-        axes[0].set_xlabel("Longitude")
-        axes[0].set_ylabel("Latitude")
-        plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
-        
-        # Prediction
-        im1 = axes[1].imshow(
-            prediction, 
-            cmap=self.colormap, 
-            vmin=vmin, 
-            vmax=vmax,
-            aspect="auto",
-            origin="upper",
-            extent=extent,
-        )
-        axes[1].set_title(f"Prediction ({self.variable_name})")
-        axes[1].set_xlabel("Longitude")
-        axes[1].set_ylabel("Latitude")
-        plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
-        
-        # Difference (error)
-        im2 = axes[2].imshow(
-            diff, 
-            cmap=self.error_colormap, 
-            vmin=-err_max, 
-            vmax=err_max,
-            aspect="auto",
-            origin="upper",
-            extent=extent,
-        )
-        axes[2].set_title(f"Error (Pred - GT)")
-        axes[2].set_xlabel("Longitude")
-        axes[2].set_ylabel("Latitude")
-        plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
-        
-        # Add metrics to title
-        rmse = np.sqrt(np.mean(diff ** 2))
-        mae = np.mean(np.abs(diff))
-        
-        if geo_bounds:
-            region_str = (
-                f"Region: ({geo_bounds['lat_min']:.1f}°N to {geo_bounds['lat_max']:.1f}°N, "
-                f"{geo_bounds['lon_min']:.1f}°E to {geo_bounds['lon_max']:.1f}°E) | "
-            )
-        else:
-            region_str = ""
-        
-        fig.suptitle(
-            f"Epoch {epoch + 1} | Sample {sample_idx} | {region_str}"
-            f"RMSE: {rmse:.4f} | MAE: {mae:.4f}",
+            f"Region: ({lat_min:.1f}°N to {lat_max:.1f}°N, {lon_min:.1f}°E to {lon_max:.1f}°E)",
             fontsize=12,
             fontweight="bold",
+            y=0.995
         )
         
         plt.tight_layout()
         return fig
-    
-    def _fig_to_image(self, fig: plt.Figure) -> Image.Image:
-        """Convert matplotlib figure to PIL Image."""
-        buf = BytesIO()
-        fig.savefig(buf, format="png", bbox_inches="tight")
-        buf.seek(0)
-        return Image.open(buf)
     
     def _get_wandb_logger(self, trainer: L.Trainer) -> Optional[WandbLogger]:
         """Get WandB logger from trainer."""
@@ -485,16 +450,14 @@ class HRESVisualizationCallback(L.Callback):
         fig_width = 6 * num_vars
         fig_height = 5
         
-        if self.use_cartopy and geo_bounds is not None:
-            projection = ccrs.PlateCarree()
-            fig, axes = plt.subplots(
-                1, num_vars,
-                figsize=(fig_width, fig_height),
-                dpi=self.dpi,
-                subplot_kw={'projection': projection}
-            )
-        else:
-            fig, axes = plt.subplots(1, num_vars, figsize=(fig_width, fig_height), dpi=self.dpi)
+        # Always use cartopy
+        projection = ccrs.PlateCarree()
+        fig, axes = plt.subplots(
+            1, num_vars,
+            figsize=(fig_width, fig_height),
+            dpi=100,  # Standard DPI
+            subplot_kw={'projection': projection}
+        )
         
         if num_vars == 1:
             axes = [axes]
@@ -518,30 +481,22 @@ class HRESVisualizationCallback(L.Callback):
             except ValueError:
                 continue
             
-            if self.use_cartopy and geo_bounds is not None:
+            # Use cartopy for all plots
+            if extent is not None:
                 ax.set_extent(extent, crs=ccrs.PlateCarree())
-                im = ax.imshow(
-                    data_2d,
-                    cmap=config['cmap'],
-                    extent=extent,
-                    origin="upper",
-                    transform=ccrs.PlateCarree(),
-                )
-                ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
-                ax.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
-                gl = ax.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
-                gl.top_labels = False
-                gl.right_labels = False
-            else:
-                im = ax.imshow(
-                    data_2d,
-                    cmap=config['cmap'],
-                    aspect="auto",
-                    origin="upper",
-                    extent=extent,
-                )
-                ax.set_xlabel("Longitude")
-                ax.set_ylabel("Latitude")
+            
+            im = ax.imshow(
+                data_2d,
+                cmap=config['cmap'],
+                extent=extent,
+                origin="upper",
+                transform=ccrs.PlateCarree(),
+            )
+            ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor='black')
+            ax.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor='gray', linestyle='--')
+            gl = ax.gridlines(draw_labels=True, linewidth=0.3, alpha=0.5)
+            gl.top_labels = False
+            gl.right_labels = False
             
             ax.set_title(config['label'])
             plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, orientation='horizontal')

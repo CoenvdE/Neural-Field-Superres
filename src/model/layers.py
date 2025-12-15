@@ -38,7 +38,7 @@ class CrossAttention(nn.Module):
         self.coordinate_system = coordinate_system
 
         if positional_information_type == "rff":
-            self.pos_encoder = CoordinateEncoder(
+            self.pos_encoder = CoordinateEncoder( #TODO: check this logic
                 coord_dim=coord_dim,
                 embed_dim=embed_dim,
                 coordinate_system=coordinate_system,

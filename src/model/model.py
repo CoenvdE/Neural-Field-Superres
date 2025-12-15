@@ -3,7 +3,6 @@ import torch.nn as nn
 from typing import Optional
 
 from .layers import CrossAttention
-from .pos_emb import CoordinateEncoder
 
 
 class NeuralFieldSuperRes(nn.Module):
@@ -25,17 +24,11 @@ class NeuralFieldSuperRes(nn.Module):
         num_processor_layers: int = 1,
         decoder_type: str = 'knn_cross',
         num_decoder_layers: int = 1,
-        use_processor: bool = True,
-        use_rope: bool = False,
-        # Auxiliary features (optional, e.g., z/lsm/slt)
+        use_processor: bool = False,
+        use_rope: bool = False, 
         num_auxiliary_features: int = 0,  # 0 = disabled
-        # Encoder-related args (commented out / not used)
-        # num_input_features: int = 256,
-        # num_latents: int = 64,
-        # coordinate_system: str = 'cartesian',
-        # embedding_freq_multiplier: tuple = (1.0, 1.0),
-        # use_encoder: bool = False,
-        # num_encoder_layers: int = 1,
+        pos_init_std: float = 0.02,  # For CrossAttention position encoding
+        predict_variance: bool = False,  # If True, output both mean and log-variance
     ):
         super().__init__()
         self.num_output_features = num_output_features
@@ -49,53 +42,17 @@ class NeuralFieldSuperRes(nn.Module):
         self.use_rope = use_rope
         self.use_processor = use_processor
         self.num_auxiliary_features = num_auxiliary_features
-
-        # Encoder-related attributes (commented out)
-        # self.num_input_features = num_input_features
-        # self.num_latents = num_latents
-        # self.coordinate_system = coordinate_system
-        # self.use_encoder = use_encoder
-        # self.num_encoder_layers = num_encoder_layers
-
-        # Initialize latents and positions (encoder-related, commented out)
-        # self.latents = nn.Parameter(
-        #     self._initialize_latents(num_latents, num_hidden_features))
-        # self.latent_pos = nn.Parameter(
-        #     self._initialize_grid_positions(num_latents, coord_dim, coordinate_system))
-
-        # Input projection (encoder-related, commented out)
-        # self.input_proj = nn.Linear(
-        #     num_input_features, num_hidden_features) if num_input_features != num_hidden_features else nn.Identity()
-
-        # Query position encoder: encode query positions to hidden_dim (512)
-        self.query_pos_encoder = CoordinateEncoder(
-            coord_dim=coord_dim,
-            embed_dim=num_hidden_features,
-            coordinate_system='cartesian',
-        )
+        self.pos_init_std = pos_init_std
+        self.predict_variance = predict_variance
         
-        # If auxiliary features exist, project [pos_encoding + aux_features] to hidden_dim
+        # If auxiliary features exist, project them to hidden_dim
         if num_auxiliary_features > 0:
             # Input is pos_encoding (hidden_dim) + aux_features (num_aux)
             self.query_proj = nn.Linear(
-                num_hidden_features + num_auxiliary_features, 
-                num_hidden_features
+                num_auxiliary_features, num_hidden_features
             )
         else:
             self.query_proj = None  # No projection needed
-
-        # Encoder (commented out)
-        # if use_encoder:
-        #     self.encoder_layers = nn.ModuleList([
-        #         CrossAttention(
-        #             num_hidden_features,
-        #             num_heads,
-        #             coord_dim=coord_dim,
-        #             coordinate_system=coordinate_system,
-        #             use_rope=use_rope,
-        #         )
-        #         for _ in range(num_encoder_layers)
-        #     ])
 
         # Processor (Self-Attention on Latents)
         if use_self_attention:
@@ -114,31 +71,17 @@ class NeuralFieldSuperRes(nn.Module):
                         num_hidden_features,
                         num_heads,
                         coord_dim=coord_dim,
-                        # coordinate_system=coordinate_system,
-                        # use_rope=use_rope,
+                        pos_init_std=self.pos_init_std,
+                        use_rope=use_rope, #NOTE: disabled for now
                     )
                 )
-            else:
-                raise ValueError(f"Unknown decoder_type: {decoder_type}")
 
         # Final projection to output dimension
-        self.final_proj = nn.Linear(num_hidden_features, num_output_features)
+        # If predicting variance, output is [mean, log_var] so double the channels
+        output_dim = num_output_features * 2 if predict_variance else num_output_features
+        self.final_proj = nn.Linear(num_hidden_features, output_dim)
 
-    # Encoder-related methods (commented out)
-    # def _initialize_latents(self, num_latents: int, dim: int) -> torch.Tensor:
-    #     """Initialize latents with random features (like gridded-tnp)."""
-    #     return torch.randn(num_latents, dim)
-
-    # def _initialize_grid_positions(self, num_points: int, dim: int, coordinate_system: str = 'cartesian') -> torch.Tensor:
-    #     """Initialize positions uniformly distributed over a domain [-1, 1]."""
-    #     if coordinate_system == 'cartesian':
-    #         return torch.rand(num_points, dim) * 2 - 1
-    #     elif coordinate_system == 'latlon':
-    #         return torch.rand(num_points, dim) * 2 - 1
-    #     elif coordinate_system == 'polar':
-    #         return torch.rand(num_points, dim) * 2 - 1
-    #     else:
-    #         raise ValueError(f"Unknown coordinate_system: {coordinate_system}")
+        self.init_query_vector = nn.Parameter(torch.randn(1, num_hidden_features))
 
     def forward(
         self,
@@ -146,9 +89,6 @@ class NeuralFieldSuperRes(nn.Module):
         latents: torch.Tensor,
         latent_pos: torch.Tensor,
         query_auxiliary_features: Optional[torch.Tensor] = None,
-        # Encoder-related args (commented out)
-        # grid_features: Optional[torch.Tensor] = None,
-        # grid_pos: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Forward pass (decoder-only mode).
@@ -162,43 +102,21 @@ class NeuralFieldSuperRes(nn.Module):
         Returns:
             predictions: [B, Q, num_output_features] predicted field values
         """
-        # Encoder logic (commented out)
-        # if self.use_encoder:
-        #     latents = self.latents.unsqueeze(0).expand(query_pos.shape[0], -1, -1)
-        #     latent_pos = self.latent_pos.unsqueeze(0).expand(query_pos.shape[0], -1, -1)
-        #     if grid_features is None or grid_pos is None:
-        #         raise ValueError("Encoder requires grid_features and grid_pos inputs")
-        #
-        #     for layer in self.encoder_layers:
-        #         delta_latents, _ = layer(
-        #             query=latents,
-        #             query_pos=latent_pos,
-        #             context=grid_features,
-        #             context_pos=grid_pos,
-        #         )
-        #         latents = latents + delta_latents
-        # else:
-        #     if latents is None or latent_pos is None:
-        #         raise ValueError("Latents and latent_pos must be provided when encoder is disabled")
-        #     latents = self.input_proj(latents)
 
         # Processor (self-attention on latents)
         if self.use_self_attention:
             latents, latent_pos = self.processor(latents, latent_pos)
 
-        # Build query input: encode position to hidden_dim, then concatenate with auxiliary features
-        # Step 1: Encode query positions to hidden_dim (512)
-        query_pos_encoded = self.query_pos_encoder(query_pos)  # [B, Q, hidden_dim]
+        # Build query input
+        query_hidden = self.init_query_vector.expand(query_pos.shape[0], query_pos.shape[1], -1) #NOTE: [B, Q, D]
         
         # Step 2: Concatenate with auxiliary features if present
         if query_auxiliary_features is not None:
-            query_input = torch.cat([query_pos_encoded, query_auxiliary_features], dim=-1)
-            # Step 3: Project [pos_encoding + aux] back to hidden_dim
-            query_hidden = self.query_proj(query_input)
-        else:
-            query_hidden = query_pos_encoded
+            query_projected_auxiliary_features = self.query_proj(query_auxiliary_features)
+            query_hidden = query_hidden + query_projected_auxiliary_features
         
         # Decoder: cross-attention from query positions to latents
+        #TODO: all positional information is now only used here
         for layer in self.decoder_layers:
             delta, _ = layer(
                 query=query_hidden,

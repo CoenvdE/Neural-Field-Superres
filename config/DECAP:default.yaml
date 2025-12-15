@@ -12,6 +12,9 @@ model:
   coord_dim: 2                        # 2D: lat, lon
   num_hidden_features: 512
   num_heads: 8
+
+  # Auxiliary features (z, lsm, slt)
+  num_auxiliary_features: 3           # 0 = disabled, 3 = enabled
   
   # Processor
   use_self_attention: false
@@ -19,20 +22,18 @@ model:
   
   # Decoder
   decoder_type: knn_cross
-  num_decoder_layers: 2
+  num_decoder_layers: 1
   
   # Position encoding
   use_rope: false
-  
-  # Auxiliary features (z, lsm, slt)
-  num_auxiliary_features: 3           # 0 = disabled, 3 = enabled
-  
+  pos_init_std: 0.02
+
   # Optimizer
   learning_rate: 1.0e-4
-  weight_decay: 0.01
+  weight_decay: 0.05
   
   # Learning rate scheduler
-  use_scheduler: true
+  use_scheduler: False
   scheduler_t_max: null               # null = use trainer.max_epochs
   scheduler_eta_min: 1.0e-6
   
@@ -43,10 +44,10 @@ model:
 data:
   # Paths
   latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
-  # Full dataset (use when HRES download is complete):
-  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
-  # Current partial data (Jan-Jun 2018):
-  hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
+  # Full merged dataset (2018-2020):
+  hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
+  # Partial data (Jan-Jun 2018 only):
+  # hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
   
   # Surface variables
   variables:
@@ -56,21 +57,24 @@ data:
   # Query sampling - number of HRES points to sample per timestep
   # Use 1000-8192 for training (memory efficient), null for full grid visualization
   # WARNING: null causes OOM on A100-40GB for large regions - use only for small test regions
-  num_query_samples: 4096
+  num_query_samples: 8192
   
   # Train/val split
-  val_months: 1                       # Reduced for partial data
+  val_months: 3                       # Reduced for partial data
   # val_months: 3                     # Use 3 months for full dataset
   
   # DataLoader
-  batch_size: 4
-  num_workers: 4
+  batch_size: 32
+  num_workers: 7
   pin_memory: true
   normalize_coords: true
   
-  # Target and static feature normalization
-  normalize_targets: true
-  statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json
+  # static feature normalization
+  normalize_static_features: true
+  # Full merged dataset statistics:
+  statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json
+  # Partial dataset statistics (2018 only):
+  # statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json
   
   # Auxiliary features (optional)
   # Europe-sliced static (create when needed):
@@ -104,7 +108,7 @@ data:
 trainer:
   accelerator: auto
   devices: auto
-  precision: 16-mixed
+  precision: bf16-mixed
   max_epochs: 100
   gradient_clip_val: 1.0
   log_every_n_steps: 10
@@ -135,9 +139,7 @@ trainer:
     - class_path: src.callbacks.visualization.HRESVisualizationCallback
       init_args:
         log_every_n_epochs: 5
-        num_samples: 1
-        variable_name: "2t"
-        plot_auxiliary_features: true
+        chunk_size: 8192
 
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger

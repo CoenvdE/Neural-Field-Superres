@@ -48,9 +48,9 @@ class EraLatentHresDataset(Dataset):
         static_variables: Optional[List[str]] = None,
         static_statistics_path: Optional[str] = None,
         use_static_features: bool = False,
+        normalize_static_features: bool = True,
         num_query_samples: Optional[int] = None,
         normalize_coords: bool = True,
-        normalize_targets: bool = True,
         statistics_path: Optional[str] = None,
         split: Optional[str] = None,
         val_months: int = 3,
@@ -60,15 +60,15 @@ class EraLatentHresDataset(Dataset):
         
         self.latent_zarr_path = latent_zarr_path
         self.hres_zarr_path = hres_zarr_path
-        self.normalize_coords = normalize_coords
-        self.normalize_targets = normalize_targets
-        self.num_query_samples = num_query_samples
+        self.normalize_coords = normalize_coords #TODO: what when
+        self.num_query_samples = num_query_samples #TODO: FIGURE OUT HOW MUCH
         self.split = split
         self.val_months = val_months
         self.static_zarr_path = static_zarr_path
-        self.static_variables = static_variables or ['z', 'lsm', 'slt']
+        self.static_variables = static_variables
         self.static_statistics_path = static_statistics_path
         self.use_static_features = use_static_features
+        self.normalize_static_features = normalize_static_features
         self.region_bounds = region_bounds
         self.statistics_path = statistics_path
         
@@ -161,8 +161,27 @@ class EraLatentHresDataset(Dataset):
         self.hres_lon = self.hres_lon[hres_lon_mask]
     
     def _setup_time_indices(self):
-        """Setup train/val time indices."""
+        """
+        Setup train/val time indices.
+        NOTE: this assumes that the latent and HRES datasets have the same timestamps 
+        and are in the same order (or a subset in the same order).
+        """
         n_common = min(len(self.latent_times), len(self.hres_times))
+        
+        # Validate that timestamps actually match between datasets
+        latent_times_common = pd.to_datetime(self.latent_times[:n_common])
+        hres_times_common = pd.to_datetime(self.hres_times[:n_common])
+        
+        if not (latent_times_common == hres_times_common).all():
+            # Find first mismatch
+            mismatch_idx = np.where(latent_times_common != hres_times_common)[0][0]
+            raise ValueError(
+                f"Timestamp mismatch between latent and HRES datasets at index {mismatch_idx}:\\n"
+                f"  Latent: {latent_times_common[mismatch_idx]}\\n"
+                f"  HRES:   {hres_times_common[mismatch_idx]}\\n"
+                f"Datasets must have matching timestamps for the first {n_common} timesteps."
+            )
+        
         all_indices = list(range(n_common))
         
         if self.split is None:
@@ -186,9 +205,6 @@ class EraLatentHresDataset(Dataset):
         self.static_mean = {}
         self.static_std = {}
         
-        if not self.normalize_targets:
-            return
-        
         # Try to load statistics file
         if self.statistics_path is None:
             # Try default path based on hres_zarr_path
@@ -198,10 +214,7 @@ class EraLatentHresDataset(Dataset):
             stats_path = Path(self.statistics_path)
         
         if not stats_path.exists():
-            print(f"Warning: Statistics file not found at {stats_path}")
-            print("Target normalization will be disabled.")
-            self.normalize_targets = False
-            return
+            raise ValueError(f"Statistics file not found at {stats_path}")
         
         # Load statistics
         with open(stats_path, 'r') as f:
@@ -213,55 +226,42 @@ class EraLatentHresDataset(Dataset):
                 self.target_mean[var] = float(stats[var]['mean'])
                 self.target_std[var] = float(stats[var]['std'])
             else:
-                print(f"Warning: Statistics not found for variable {var}")
-                self.normalize_targets = False
-                return
+                raise ValueError(f"Statistics not found for variable {var}")
         
+        #NOTE: print to be sure
         print(f"Loaded target statistics from {stats_path}")
         for var in self.variables:
             print(f"  {var}: mean={self.target_mean[var]:.2f}, std={self.target_std[var]:.2f}")
         
         # Load statistics for static variables if using static features
         if self.use_static_features:
-            static_stats_loaded = False
+            if self.static_statistics_path:
+                static_stats_path = Path(self.static_statistics_path)
+            elif self.static_zarr_path:
+                static_path = Path(self.static_zarr_path)
+                static_stats_path = static_path.parent / f"{static_path.stem}_statistics.json"
+            else:
+                static_stats_path = None
             
-            # First, check if static variables are in the same stats file
-            for var in self.static_variables:
-                if var in stats:
-                    self.static_mean[var] = float(stats[var]['mean'])
-                    self.static_std[var] = float(stats[var]['std'])
-                    static_stats_loaded = True
-            
-            # If not found in main file, try explicit static_statistics_path or derive from zarr path
-            if not static_stats_loaded:
-                if self.static_statistics_path:
-                    static_stats_path = Path(self.static_statistics_path)
-                elif self.static_zarr_path:
-                    static_path = Path(self.static_zarr_path)
-                    static_stats_path = static_path.parent / f"{static_path.stem}_statistics.json"
-                else:
-                    static_stats_path = None
+            try:
+                with open(static_stats_path, 'r') as f:
+                    static_stats = json.load(f)
                 
-                if static_stats_path and static_stats_path.exists():
-                    with open(static_stats_path, 'r') as f:
-                        static_stats = json.load(f)
-                    
-                    for var in self.static_variables:
-                        if var in static_stats:
-                            self.static_mean[var] = float(static_stats[var]['mean'])
-                            self.static_std[var] = float(static_stats[var]['std'])
-                            static_stats_loaded = True
-                elif static_stats_path:
-                    raise FileNotFoundError(
-                        f"Static statistics file not found at {static_stats_path}. "
-                        f"Please create this file with mean/std for {self.static_variables} or set use_static_features=false."
-                    )
-            
-            if static_stats_loaded and self.static_mean:
-                print(f"Loaded static feature statistics:")
-                for var in self.static_mean.keys():
-                    print(f"  {var}: mean={self.static_mean[var]:.2f}, std={self.static_std[var]:.2f}")
-    
+                for var in self.static_variables:
+                    if var in static_stats:
+                        self.static_mean[var] = float(static_stats[var]['mean'])
+                        self.static_std[var] = float(static_stats[var]['std'])
+            except FileNotFoundError:
+                raise ValueError(
+                    f"Static statistics file not found at {static_stats_path}. "
+                    f"Please create this file with mean/std for {self.static_variables} or set use_static_features=false."
+                )
+        
+        #NOTE: print to be sure
+        print(f"Loaded static feature statistics:")
+        for var in self.static_mean.keys():
+            print(f"  {var}: mean={self.static_mean[var]:.2f}, std={self.static_std[var]:.2f}")
+
     def _compute_bounds(self):
         """Compute lat/lon bounds for normalization based on latent grid coverage."""
         # Use latent bounds as the base - HRES is already clipped to these
@@ -293,45 +293,61 @@ class EraLatentHresDataset(Dataset):
     
     def _load_static_features(self):
         """Load optional static features and normalize them."""
-        if not self.use_static_features or self.static_zarr_path is None:
+        if not self.use_static_features:
             self.static_features = None
             return
+        
+        if self.static_zarr_path is None:
+            raise ValueError("static_zarr_path must be specified when use_static_features=True")
         
         print(f"Loading static features from {self.static_zarr_path}...")
         static_ds = xr.open_zarr(self.static_zarr_path, consolidated=True)
         
         # Check both data_vars and coordinates for static variables
         available = []
-        for v in self.static_variables:
-            if v in static_ds.data_vars or v in static_ds.coords:
-                available.append(v)
+        if self.static_variables is None:
+            self.static_variables = static_ds.data_vars.keys()
+        else:
+            for v in self.static_variables:
+                if v in static_ds.data_vars or v in static_ds.coords:
+                    available.append(v)
         
         if not available:
-            print(f"  Warning: No static variables found in {list(static_ds.data_vars.keys())} or {list(static_ds.coords.keys())}")
-            self.static_features = None
-            return
+            raise ValueError(f"No static variables found")
         
         # Load and optionally normalize each static variable
         features = []
         for var in available:
-            # Get data from either data_vars or coords
-            if var in static_ds.data_vars:
-                data = static_ds[var].values
-            else:
-                data = static_ds[var].values
+            data = static_ds[var].values
             
-            # Slice to match HRES region if needed
-            if len(data.shape) == 2:  # Spatial grid
+            # Slice 2D spatial grid to match HRES region using advanced indexing
+            # np.ix_ creates a mesh from 1D index arrays for efficient 2D slicing
+            if len(data.shape) == 2:
                 data = data[np.ix_(self.hres_lat_indices, self.hres_lon_indices)]
             
             data = data.flatten().astype(np.float32)
             
             # Apply Z-score normalization if statistics available
-            if self.normalize_targets and var in self.static_mean:
-                data = (data - self.static_mean[var]) / self.static_std[var]
-                print(f"  {var}: normalized (mean={self.static_mean[var]:.2f}, std={self.static_std[var]:.2f})")
+            if self.normalize_static_features:
+                if var not in self.static_mean or var not in self.static_std:
+                    raise ValueError(
+                        f"Cannot normalize static feature '{var}': "
+                        f"statistics not found in {self.static_statistics_path}. "
+                        f"Available: {list(self.static_mean.keys())}"
+                    )
+                
+                std_val = self.static_std[var]
+                if abs(std_val) < 1e-8:
+                    raise ValueError(
+                        f"Cannot normalize static feature '{var}': "
+                        f"standard deviation is {std_val} (constant or near-constant values). "
+                        f"Consider excluding this feature or disabling normalization."
+                    )
+                
+                data = (data - self.static_mean[var]) / std_val
+                print(f"  {var}: normalized (mean={self.static_mean[var]:.2f}, std={std_val:.2f})")
             else:
-                print(f"  {var}: NOT normalized (no statistics found)")
+                print(f"  {var}: NOT normalized")
             
             features.append(data)
         
@@ -375,12 +391,9 @@ class EraLatentHresDataset(Dataset):
         Returns:
             Denormalized data in original units
         """
-        if not self.normalize_targets or var_idx >= len(self.variables):
-            return normalized_data
-        
         var = self.variables[var_idx]
         if var not in self.target_mean:
-            return normalized_data
+            raise ValueError(f"Cannot denormalize variable '{var}': statistics not found")
         
         mean = self.target_mean[var]
         std = self.target_std[var]
@@ -409,13 +422,16 @@ class EraLatentHresDataset(Dataset):
             ).values.flatten()
             
             # Apply Z-score normalization if enabled
-            if self.normalize_targets and var in self.target_mean:
+            if var in self.target_mean:
                 data = (data - self.target_mean[var]) / self.target_std[var]
+            else:
+                raise ValueError(f"Cannot normalize variable '{var}': statistics not found")
             
             fields.append(data)
         query_fields = np.stack(fields, axis=-1).astype(np.float32)
         
         # Get positions
+        # NOTE: copy is needed to avoid modifying the original data
         latent_pos = self.latent_positions.copy()
         query_pos = self.hres_positions.copy()
         aux_feats = self.static_features.copy() if self.static_features is not None else None
@@ -440,71 +456,3 @@ class EraLatentHresDataset(Dataset):
         
         return result
 
-
-def create_superres_dataloader(
-    latent_zarr_path: str,
-    hres_zarr_path: str,
-    variables: Optional[List[str]] = None,
-    batch_size: int = 4,
-    num_workers: int = 4,
-    **kwargs,
-) -> DataLoader:
-    """Create a single DataLoader for the super-resolution dataset."""
-    dataset = EraLatentHresDataset(
-        latent_zarr_path=latent_zarr_path,
-        hres_zarr_path=hres_zarr_path,
-        variables=variables,
-        **kwargs,
-    )
-    return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-
-
-def create_train_val_dataloaders(
-    latent_zarr_path: str,
-    hres_zarr_path: str,
-    variables: Optional[List[str]] = None,
-    batch_size: int = 4,
-    num_workers: int = 4,
-    val_months: int = 3,
-    **kwargs,
-) -> Tuple[DataLoader, DataLoader]:
-    """Create train and validation DataLoaders."""
-    train_dataset = EraLatentHresDataset(
-        latent_zarr_path=latent_zarr_path,
-        hres_zarr_path=hres_zarr_path,
-        variables=variables,
-        split='train',
-        val_months=val_months,
-        **kwargs,
-    )
-    val_dataset = EraLatentHresDataset(
-        latent_zarr_path=latent_zarr_path,
-        hres_zarr_path=hres_zarr_path,
-        variables=variables,
-        split='val',
-        val_months=val_months,
-        **kwargs,
-    )
-    
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-    
-    return train_loader, val_loader

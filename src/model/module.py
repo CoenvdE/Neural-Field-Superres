@@ -15,7 +15,7 @@ import torch.nn as nn
 import lightning as L
 from typing import Optional, List, Dict, Any, Literal
 from torch.optim.lr_scheduler import CosineAnnealingLR
-
+from .likelihoods import GaussianLikelihood, HeteroscedasticGaussianLikelihood
 from .model import NeuralFieldSuperRes
 
 
@@ -45,6 +45,7 @@ class NeuralFieldSuperResModule(L.LightningModule):
         
         # Position encoding
         use_rope: bool = False,
+        pos_init_std: float = 0.02,  # For CrossAttention position encoding
         
         # Auxiliary features (optional, e.g., z/lsm/slt)
         num_auxiliary_features: int = 0,  # 0 = disabled, 3 = z/lsm/slt
@@ -57,9 +58,15 @@ class NeuralFieldSuperResModule(L.LightningModule):
         use_scheduler: bool = True,
         scheduler_t_max: Optional[int] = None,  # Defaults to max_epochs
         scheduler_eta_min: float = 1e-6,
+        init_std: float = 1,
         
         # Loss settings
-        loss_type: Literal["mse", "mae", "huber"] = "mse",
+        loss_type: Literal["mse", "gaussian_nll", "heteroscedastic_nll"] = "mse",
+        
+        # Gaussian NLL settings (only used when loss_type contains 'nll')
+        gaussian_noise_init: float = 0.1,        # Initial noise for homoscedastic
+        gaussian_min_noise: float = 1e-3,        # Min noise for heteroscedastic
+        gaussian_train_noise: bool = True,       # Whether to learn noise parameter
         
         # Encoder-related args (commented out / not used in decoder-only mode)
         # num_input_features: int = 256,
@@ -72,6 +79,9 @@ class NeuralFieldSuperResModule(L.LightningModule):
         self.save_hyperparameters()
         
         # Build model (decoder-only)
+        # Enable variance prediction for heteroscedastic loss
+        predict_variance = loss_type == "heteroscedastic_nll"
+        
         self.model = NeuralFieldSuperRes(
             num_output_features=num_output_features,
             coord_dim=coord_dim,
@@ -82,21 +92,30 @@ class NeuralFieldSuperResModule(L.LightningModule):
             decoder_type=decoder_type,
             num_decoder_layers=num_decoder_layers,
             use_rope=use_rope,
+            pos_init_std=pos_init_std,
             num_auxiliary_features=num_auxiliary_features,
+            predict_variance=predict_variance,
         )
         
-        # Loss function
+        # Loss function and likelihood
         if loss_type == "mse":
             self.loss_fn = nn.MSELoss()
-        elif loss_type == "mae":
-            self.loss_fn = nn.L1Loss()
-        elif loss_type == "huber":
-            self.loss_fn = nn.HuberLoss()
+            self.likelihood = None
+        elif loss_type == "gaussian_nll":
+            # Homoscedastic: model predicts mean, variance is learned parameter
+            self.likelihood = GaussianLikelihood(
+                noise=gaussian_noise_init,
+                train_noise=gaussian_train_noise
+            )
+            self.loss_fn = None  # Will use NLL directly
+        elif loss_type == "heteroscedastic_nll":
+            # Heteroscedastic: model predicts both mean and variance
+            self.likelihood = HeteroscedasticGaussianLikelihood(
+                min_noise=gaussian_min_noise
+            )
+            self.loss_fn = None
         else:
             raise ValueError(f"Unknown loss_type: {loss_type}")
-        
-        # Store for visualization callback
-        self.validation_step_outputs: List[Dict[str, torch.Tensor]] = []
         
     def forward(
         self,
@@ -190,23 +209,30 @@ class NeuralFieldSuperResModule(L.LightningModule):
         )
         
         # Compute loss against ground truth
-        loss = self.loss_fn(predictions, query_fields)
+        if self.likelihood is not None:
+            # Gaussian NLL loss
+            pred_dist = self.likelihood(predictions)
+            # Compute negative log-likelihood averaged over all targets
+            nll = -pred_dist.log_prob(query_fields).sum() / query_fields.numel()
+            loss = nll
+            
+            # For metrics, use mean predictions only
+            pred_mean = pred_dist.mean
+        else:
+            # Deterministic loss (MSE, etc.)
+            loss = self.loss_fn(predictions, query_fields)
+            pred_mean = predictions
         
-        # Compute additional metrics
+        # Compute additional metrics using mean predictions
         with torch.no_grad():
-            mse = nn.functional.mse_loss(predictions, query_fields)
-            mae = nn.functional.l1_loss(predictions, query_fields)
+            mse = nn.functional.mse_loss(pred_mean, query_fields)
             rmse = torch.sqrt(mse)
+
+        self.log(f"{stage}/loss", loss, prog_bar=True, sync_dist=True)
+        self.log(f"{stage}/mse", mse, sync_dist=True)
+        self.log(f"{stage}/rmse", rmse, sync_dist=True)
         
-        return {
-            "loss": loss,
-            "mse": mse,
-            "mae": mae,
-            "rmse": rmse,
-            "predictions": predictions,
-            "targets": query_fields,
-            "query_pos": query_pos,
-        }
+        return {"loss": loss}
     
     def training_step(
         self, 
@@ -215,43 +241,16 @@ class NeuralFieldSuperResModule(L.LightningModule):
     ) -> torch.Tensor:
         """Training step."""
         outputs = self._shared_step(batch, batch_idx, "train")
-        
-        # Log metrics
-        self.log("train/loss", outputs["loss"], prog_bar=True, sync_dist=True)
-        self.log("train/mse", outputs["mse"], sync_dist=True)
-        self.log("train/mae", outputs["mae"], sync_dist=True)
-        self.log("train/rmse", outputs["rmse"], sync_dist=True)
-        
         return outputs["loss"]
     
     def validation_step(
         self, 
         batch: Dict[str, torch.Tensor], 
         batch_idx: int
-    ) -> Dict[str, torch.Tensor]:
+    ) -> torch.Tensor:
         """Validation step."""
         outputs = self._shared_step(batch, batch_idx, "val")
-        
-        # Log metrics
-        self.log("val/loss", outputs["loss"], prog_bar=True, sync_dist=True)
-        self.log("val/mse", outputs["mse"], sync_dist=True)
-        self.log("val/mae", outputs["mae"], sync_dist=True)
-        self.log("val/rmse", outputs["rmse"], sync_dist=True)
-        
-        # Store first few batches for visualization
-        if batch_idx < 4:
-            self.validation_step_outputs.append({
-                "predictions": outputs["predictions"].detach().cpu(),
-                "targets": outputs["targets"].detach().cpu(),
-                "query_pos": outputs["query_pos"].detach().cpu(),
-            })
-        
-        return outputs
-    
-    def on_validation_epoch_end(self) -> None:
-        """Clear validation outputs after epoch."""
-        # Outputs are used by visualization callback, then cleared
-        self.validation_step_outputs.clear()
+        return outputs["loss"]
     
     def configure_optimizers(self) -> Dict[str, Any]:
         """Configure optimizer and scheduler."""
