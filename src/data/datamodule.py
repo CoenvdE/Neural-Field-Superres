@@ -36,7 +36,6 @@ class NeuralFieldDataModule(L.LightningDataModule):
         
         # Normalization
         normalize_coords: bool = True,
-        normalize_targets: bool = True,
         statistics_path: Optional[str] = None,
         
         # Static/auxiliary features
@@ -64,7 +63,6 @@ class NeuralFieldDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.normalize_coords = normalize_coords
-        self.normalize_targets = normalize_targets
         self.statistics_path = statistics_path
         self.static_zarr_path = static_zarr_path
         self.static_variables = static_variables
@@ -95,7 +93,6 @@ class NeuralFieldDataModule(L.LightningDataModule):
                 variables=self.variables,
                 num_query_samples=self.num_query_samples,
                 normalize_coords=self.normalize_coords,
-                normalize_targets=self.normalize_targets,
                 statistics_path=self.statistics_path,
                 split="train",
                 val_months=self.val_months,
@@ -113,7 +110,6 @@ class NeuralFieldDataModule(L.LightningDataModule):
                 variables=self.variables,
                 num_query_samples=self.num_query_samples,
                 normalize_coords=self.normalize_coords,
-                normalize_targets=self.normalize_targets,
                 statistics_path=self.statistics_path,
                 split="val",
                 val_months=self.val_months,
