@@ -77,6 +77,9 @@ class HRESVisualizationCallback(L.Callback):
         if geo_bounds is None:
             raise ValueError("Geographic bounds are None - dataset not properly initialized")
         
+        # Get configured region bounds for title display (if available)
+        configured_region = self._get_configured_region(trainer)
+        
         # Get the validation dataset for full-grid samples
         val_dataset = trainer.datamodule.val_dataset
         if val_dataset is None:
@@ -190,6 +193,7 @@ class HRESVisualizationCallback(L.Callback):
                     sample_idx=sample_idx,
                     epoch=trainer.current_epoch,
                     uncertainty_data=uncertainty_data_2d,
+                    title_region_bounds=configured_region,
                 )
                 
                 # Log to WandB via PyTorch Lightning logger
@@ -230,12 +234,17 @@ class HRESVisualizationCallback(L.Callback):
         sample_idx: int,
         epoch: int,
         uncertainty_data: Optional[List[np.ndarray]] = None,
+        title_region_bounds: Optional[Dict[str, float]] = None,
     ) -> plt.Figure:
         """Create multi-variable figure using cartopy.
         
         Layout: Prediction | Ground Truth | Error (| Uncertainty if likelihood)
         When uncertainty_data is provided, creates 4 columns.
         Otherwise creates 3 columns: Pred, GT, Error.
+        
+        Args:
+            title_region_bounds: Optional configured region bounds for title display.
+                                 Falls back to geo_bounds if not provided.
         """
         num_vars = len(var_data)
         
@@ -254,7 +263,7 @@ class HRESVisualizationCallback(L.Callback):
         fig, axes = plt.subplots(
             num_vars, num_cols,
             figsize=(6 * num_cols, 5 * num_vars),
-            dpi=100,  # Standard DPI
+            dpi=200,  # High DPI for sharp images
             subplot_kw={'projection': projection}
         )
         
@@ -364,11 +373,16 @@ class HRESVisualizationCallback(L.Callback):
                 gl_unc.right_labels = False
                 ax_unc.set_title(f"Uncertainty ({var_name})\nmean={unc_mean:.4f}, std={unc_std:.4f}")
                 plt.colorbar(im_unc, ax=ax_unc, fraction=0.046, pad=0.04, orientation='horizontal')
+        # Add overall title (use configured region bounds if available for cleaner display)
+        title_bounds = title_region_bounds if title_region_bounds is not None else geo_bounds
+        title_lat_min = title_bounds.get("lat_min", lat_min)
+        title_lat_max = title_bounds.get("lat_max", lat_max)
+        title_lon_min = title_bounds.get("lon_min", lon_min)
+        title_lon_max = title_bounds.get("lon_max", lon_max)
         
-        # Add overall title
         fig.suptitle(
             f"Epoch {epoch + 1} | Sample {sample_idx} | "
-            f"Region: ({lat_min:.1f}°N to {lat_max:.1f}°N, {lon_min:.1f}°E to {lon_max:.1f}°E)",
+            f"Region: ({title_lat_min:.1f}°N to {title_lat_max:.1f}°N, {title_lon_min:.1f}°E to {title_lon_max:.1f}°E)",
             fontsize=12,
             fontweight="bold",
             y=0.995
@@ -413,6 +427,19 @@ class HRESVisualizationCallback(L.Callback):
         
         return None
     
+    def _get_configured_region(self, trainer: L.Trainer) -> Optional[Dict[str, float]]:
+        """Get user-configured region bounds from dataset (if available)."""
+        if trainer.datamodule is None:
+            return None
+        
+        # Try to get from validation dataset first, then train dataset
+        for dataset_attr in ['val_dataset', 'train_dataset']:
+            dataset = getattr(trainer.datamodule, dataset_attr, None)
+            if dataset is not None and hasattr(dataset, 'region_bounds'):
+                return dataset.region_bounds
+        
+        return None
+    
     def _create_auxiliary_figure(
         self,
         static_features: np.ndarray,
@@ -441,7 +468,7 @@ class HRESVisualizationCallback(L.Callback):
         fig, axes = plt.subplots(
             1, num_vars,
             figsize=(fig_width, fig_height),
-            dpi=100,  # Standard DPI
+            dpi=200,  # High DPI for sharp images
             subplot_kw={'projection': projection}
         )
         

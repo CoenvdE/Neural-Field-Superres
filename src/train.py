@@ -22,6 +22,10 @@ Usage:
 import os
 import sys
 
+# Suppress pkg_resources deprecation warnings from Lightning (must be before lightning import)
+import warnings
+warnings.filterwarnings("ignore", message=".*pkg_resources is deprecated.*")
+
 # Add src to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -30,9 +34,6 @@ from lightning.pytorch.cli import LightningCLI
 
 from src.model import NeuralFieldSuperResModule
 from src.data import NeuralFieldDataModule
-
-import warnings
-warnings.filterwarnings("ignore", message=".*pkg_resources is deprecated.*")
 
 # Optimize for A100 Tensor Cores
 torch.set_float32_matmul_precision('high')
