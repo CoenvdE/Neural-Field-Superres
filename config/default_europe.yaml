@@ -42,7 +42,7 @@ model:
   scheduler_eta_min: 1.0e-6
   
   # Loss function
-  loss_type: mse # mse or
+  loss_type: heteroscedastic_nll # mse, gaussian_nll or heteroscedastic_nll
 
 # Data configuration
 data:
@@ -66,11 +66,13 @@ data:
   val_months: 3                       # Reduced for partial data
   # val_months: 3                     # Use 3 months for full dataset
   
-  # DataLoader - reduced batch size for full Europe (8.5x more latent tokens)
+  # DataLoader
   batch_size: 16
   num_workers: 7
   pin_memory: true
   normalize_coords: true
+  prefetch_factor: 4                    # Pre-load more batches
+  persistent_workers: true              # Avoid worker respawn overhead
   
   # static feature normalization
   normalize_static_features: true

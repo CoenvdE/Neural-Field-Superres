@@ -50,6 +50,10 @@ class NeuralFieldDataModule(L.LightningDataModule):
         region_lat_max: Optional[float] = None,
         region_lon_min: Optional[float] = None,
         region_lon_max: Optional[float] = None,
+        
+        # Dataloader optimization
+        prefetch_factor: int = 2,
+        persistent_workers: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -80,6 +84,9 @@ class NeuralFieldDataModule(L.LightningDataModule):
             }
         else:
             self.region_bounds = None
+        
+        self.prefetch_factor = prefetch_factor
+        self.persistent_workers = persistent_workers
         
         self.train_dataset = None
         self.val_dataset = None
@@ -129,6 +136,8 @@ class NeuralFieldDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             multiprocessing_context="forkserver" if self.num_workers > 0 else None,
+            prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
+            persistent_workers=self.persistent_workers if self.num_workers > 0 else False,
         )
     
     def val_dataloader(self) -> DataLoader:
@@ -139,6 +148,8 @@ class NeuralFieldDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             multiprocessing_context="forkserver" if self.num_workers > 0 else None,
+            prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
+            persistent_workers=self.persistent_workers if self.num_workers > 0 else False,
         )
     
     @property
