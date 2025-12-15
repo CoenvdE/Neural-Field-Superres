@@ -16,7 +16,7 @@ import wandb
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from .likelihoods import GaussianLikelihood, HeteroscedasticGaussianLikelihood
+from src.model.likelihoods import GaussianLikelihood, HeteroscedasticGaussianLikelihood
 
 class HRESVisualizationCallback(L.Callback):
     """
