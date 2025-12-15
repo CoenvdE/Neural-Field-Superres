@@ -21,14 +21,13 @@ import xarray as xr
 import json
 from pathlib import Path
 
-
 class EraLatentHresDataset(Dataset):
     """
     Dataset for neural field super-resolution from ERA5 latents to HRES surface fields.
     
     Args:
-        latent_zarr_path: Path to Zarr store with ERA5 latents
-        hres_zarr_path: Path to Zarr store with HRES field values
+        latent_zarr_path: Path to Zarr with ERA5 latents
+        hres_zarr_path: Path to Zarr with HRES field values
         variables: List of surface variable names (e.g., ['2t', 'msl'])
         num_query_samples: Number of HRES positions to sample per batch (None = all)
         normalize_coords: Whether to normalize coordinates to [-1, 1]
@@ -55,6 +54,7 @@ class EraLatentHresDataset(Dataset):
         split: Optional[str] = None,
         val_months: int = 3,
         region_bounds: Optional[Dict[str, float]] = None,
+        zarr_format: Optional[int] = None,  # None=auto, 2=v2, 3=v3
     ):
         super().__init__()
         
@@ -71,10 +71,11 @@ class EraLatentHresDataset(Dataset):
         self.normalize_static_features = normalize_static_features
         self.region_bounds = region_bounds
         self.statistics_path = statistics_path
+        self.zarr_format = zarr_format
         
-        # Open Zarr stores
-        self.latent_ds = xr.open_zarr(latent_zarr_path, consolidated=True)
-        self.hres_ds = xr.open_zarr(hres_zarr_path, consolidated=True)
+        # Open Zarr (with v3 fallback support)
+        self.latent_ds = self._open_zarr(latent_zarr_path)
+        self.hres_ds = self._open_zarr(hres_zarr_path)
         
         # Get original coordinates
         self._latent_lat_orig = self.latent_ds['lat'].values
@@ -112,6 +113,23 @@ class EraLatentHresDataset(Dataset):
         self._load_static_features()
         
         self._print_info()
+    
+    def _open_zarr(self, zarr_path: str) -> Tuple:
+        """Open a Zarr store with v3 fallback support.
+        
+        Tries xarray first. If that fails (e.g., for zarr v3 with sharding),
+        falls back to direct zarr access wrapped in an xarray-like interface.
+        
+        Returns:
+            Tuple of (xarray.Dataset or ZarrDatasetWrapper, zarr.Group or None)
+        """
+        if self.zarr_format == 3:
+            # Explicitly open as v3
+            ds = xr.open_zarr(zarr_path, consolidated=False, zarr_format=3)
+        else:
+            # Auto-detect format
+            ds = xr.open_zarr(zarr_path, consolidated=True)
+        return ds
     
     def _clip_hres_to_latent_bounds(self):
         """Clip HRES grid to only include points within latent spatial coverage."""

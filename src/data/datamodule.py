@@ -54,6 +54,9 @@ class NeuralFieldDataModule(L.LightningDataModule):
         # Dataloader optimization
         prefetch_factor: int = 2,
         persistent_workers: bool = False,
+        
+        # Zarr format (None=auto, 2=v2, 3=v3 with sharding support)
+        zarr_format: Optional[int] = None,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -87,6 +90,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
         
         self.prefetch_factor = prefetch_factor
         self.persistent_workers = persistent_workers
+        self.zarr_format = zarr_format
         
         self.train_dataset = None
         self.val_dataset = None
@@ -109,6 +113,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
                 use_static_features=self.use_static_features,
                 normalize_static_features=self.normalize_static_features,
                 region_bounds=self.region_bounds,
+                zarr_format=self.zarr_format,
             )
             
             self.val_dataset = EraLatentHresDataset(
@@ -126,6 +131,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
                 use_static_features=self.use_static_features,
                 normalize_static_features=self.normalize_static_features,
                 region_bounds=self.region_bounds,
+                zarr_format=self.zarr_format,
             )
     
     def train_dataloader(self) -> DataLoader:
