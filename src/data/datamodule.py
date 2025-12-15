@@ -44,6 +44,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
         static_variables: Optional[List[str]] = None,
         static_statistics_path: Optional[str] = None,
         use_static_features: bool = False,
+        normalize_static_features: bool = True,
         
         # Region filtering - individual floats for CLI compatibility
         region_lat_min: Optional[float] = None,
@@ -69,6 +70,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
         self.static_variables = static_variables
         self.static_statistics_path = static_statistics_path
         self.use_static_features = use_static_features
+        self.normalize_static_features = normalize_static_features
         
         # Build region_bounds dict from individual params if any are set
         if all(v is not None for v in [region_lat_min, region_lat_max, region_lon_min, region_lon_max]):
@@ -101,6 +103,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
                 static_variables=self.static_variables,
                 static_statistics_path=self.static_statistics_path,
                 use_static_features=self.use_static_features,
+                normalize_static_features=self.normalize_static_features,
                 region_bounds=self.region_bounds,
             )
             
@@ -118,6 +121,7 @@ class NeuralFieldDataModule(L.LightningDataModule):
                 static_variables=self.static_variables,
                 static_statistics_path=self.static_statistics_path,
                 use_static_features=self.use_static_features,
+                normalize_static_features=self.normalize_static_features,
                 region_bounds=self.region_bounds,
             )
     
