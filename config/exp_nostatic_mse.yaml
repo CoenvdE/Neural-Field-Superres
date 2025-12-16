@@ -49,16 +49,16 @@ model:
 
 # Data configuration
 data:
-  # ==== SquashFS mounted paths ====
-  latent_zarr_path: /projects/prjs1858/sqsh_mounts/latents
-  hres_zarr_path: /projects/prjs1858/sqsh_mounts/hres
-  static_zarr_path: /projects/prjs1858/sqsh_mounts/static
+  # ==== SquashFS mounted paths (commented out) ====
+  # latent_zarr_path: /projects/prjs1858/sqsh_mounts/latents
+  # hres_zarr_path: /projects/prjs1858/sqsh_mounts/hres
+  # static_zarr_path: /projects/prjs1858/sqsh_mounts/static
 
   # ==== Zarr v3 paths (commented out) ====
-  # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
-  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
-  # static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
-  # zarr_format: 3  # Enable v3 mode with fallback
+  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
+  hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
+  static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
+  zarr_format: 3  # Enable v3 mode with fallback
 
   static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
   statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json
