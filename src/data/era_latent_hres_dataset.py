@@ -399,6 +399,19 @@ class EraLatentHresDataset(Dataset):
             "lon_max": float(self.hres_lon.max()),
         }
     
+    def get_timestamp(self, idx: int) -> str:
+        """Get formatted timestamp string for a sample index.
+        
+        Args:
+            idx: Sample index in the dataset
+            
+        Returns:
+            Formatted timestamp string (e.g., "2020-01-15 12:00")
+        """
+        time_idx = self.time_indices[idx]
+        timestamp = pd.to_datetime(self.latent_times[time_idx])
+        return timestamp.strftime("%Y-%m-%d %H:%M")
+    
     def denormalize_targets(self, normalized_data: torch.Tensor, var_idx: int) -> torch.Tensor:
         """
         Denormalize target data back to original scale.

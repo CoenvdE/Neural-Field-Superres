@@ -95,6 +95,11 @@ class HRESVisualizationCallback(L.Callback):
             sample_idx = 0
             sample = val_dataset[sample_idx]
             
+            # Get timestamp for this sample (if available)
+            timestamp_str = None
+            if hasattr(val_dataset, 'get_timestamp'):
+                timestamp_str = val_dataset.get_timestamp(sample_idx)
+            
             # Move to device and add batch dimension
             latents = sample['latents'].unsqueeze(0).to(device)          # [1, Z, D]
             latent_pos = sample['latent_pos'].unsqueeze(0).to(device)    # [1, Z, 2]
@@ -194,6 +199,7 @@ class HRESVisualizationCallback(L.Callback):
                     epoch=trainer.current_epoch,
                     uncertainty_data=uncertainty_data_2d,
                     title_region_bounds=configured_region,
+                    timestamp_str=timestamp_str,
                 )
                 
                 # Log to WandB via PyTorch Lightning logger
@@ -235,6 +241,7 @@ class HRESVisualizationCallback(L.Callback):
         epoch: int,
         uncertainty_data: Optional[List[np.ndarray]] = None,
         title_region_bounds: Optional[Dict[str, float]] = None,
+        timestamp_str: Optional[str] = None,
     ) -> plt.Figure:
         """Create multi-variable figure using cartopy.
         
@@ -380,9 +387,15 @@ class HRESVisualizationCallback(L.Callback):
         title_lon_min = title_bounds.get("lon_min", lon_min)
         title_lon_max = title_bounds.get("lon_max", lon_max)
         
+        # Build title with optional timestamp
+        title_parts = [f"Epoch {epoch + 1}"]
+        if timestamp_str is not None:
+            title_parts.append(f"Time: {timestamp_str}")
+        title_parts.append(f"Sample {sample_idx}")
+        title_parts.append(f"Region: ({title_lat_min:.1f}°N to {title_lat_max:.1f}°N, {title_lon_min:.1f}°E to {title_lon_max:.1f}°E)")
+        
         fig.suptitle(
-            f"Epoch {epoch + 1} | Sample {sample_idx} | "
-            f"Region: ({title_lat_min:.1f}°N to {title_lat_max:.1f}°N, {title_lon_min:.1f}°E to {title_lon_max:.1f}°E)",
+            " | ".join(title_parts),
             fontsize=12,
             fontweight="bold",
             y=0.995
