@@ -1,0 +1,69 @@
+# Neural Field Super-Resolution - Project Configuration
+# =====================================================
+# Install with uv: uv pip install -e .
+# Install with pip: pip install -e .
+#
+# For CUDA on Snellius:
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+#   uv pip install -e .
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neural-field-superres"
+version = "0.1.0"
+description = "Neural Field Super-Resolution for Weather Data"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Coen van den Elsen"}
+]
+
+dependencies = [
+    # PyTorch (installed separately with CUDA)
+    # torch>=2.4.0
+    
+    # Lightning
+    "lightning>=2.4.0",
+    "jsonargparse[signatures]>=4.27.7",
+    
+    # Data handling
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "xarray>=2024.1.0",
+    "zarr>=2.16.0",
+    "dask",
+    "h5netcdf",
+    
+    # Visualization
+    "matplotlib>=3.7.0",
+    "cartopy>=0.22.0",
+    
+    # Experiment tracking
+    "wandb>=0.16.0",
+    
+    # Utilities
+    "einops>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]

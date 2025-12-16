@@ -73,6 +73,10 @@ class NeuralFieldSuperResModule(L.LightningModule):
         gaussian_min_noise: float = 1e-3,        # Min noise for heteroscedastic
         gaussian_train_noise: bool = True,       # Whether to learn noise parameter
         
+        # torch.compile() settings (PyTorch 2.0+)
+        compile_model: bool = False,             # Enable torch.compile for speedup
+        compile_mode: str = "default",           # default, reduce-overhead, max-autotune
+        
         # Encoder-related args (commented out / not used in decoder-only mode)
         # num_input_features: int = 256,
         # num_latents: int = 64,
@@ -124,6 +128,14 @@ class NeuralFieldSuperResModule(L.LightningModule):
             self.loss_fn = None
         else:
             raise ValueError(f"Unknown loss_type: {loss_type}")
+        
+        # Compile model for faster execution (PyTorch 2.0+)
+        if compile_model:
+            try:
+                self.model = torch.compile(self.model, mode=compile_mode)
+                print(f"✓ Model compiled with mode='{compile_mode}'")
+            except Exception as e:
+                print(f"⚠ torch.compile failed, using eager mode: {e}")
         
     def forward(
         self,

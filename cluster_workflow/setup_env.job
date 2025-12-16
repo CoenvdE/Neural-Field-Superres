@@ -1,0 +1,121 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --job-name=SetupEnv-NFSR
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --time=01:00:00
+#SBATCH --output=cluster_workflow/slurm_outputs/setup_env_%A.out
+#SBATCH --error=cluster_workflow/slurm_outputs/setup_env_%A.err
+
+# =============================================================================
+# Neural Field Super-Resolution - Environment Setup
+# =============================================================================
+# This job creates the conda/uv environment on Snellius.
+# Run once after cloning the repository.
+#
+# Usage:
+#   cd /home/$USER/Neural-Field-Superres
+#   sbatch cluster_workflow/setup_env.job
+#
+# After completion, use one of these in your training jobs:
+#   source activate neural-field-superres   # conda
+#   source ~/.venvs/nfsr/bin/activate        # uv
+# =============================================================================
+
+set -e  # Exit on any error
+
+echo "============================================================"
+echo " Environment Setup Started: $(date)"
+echo " Node: $(hostname)"
+echo "============================================================"
+
+# Create output directory
+mkdir -p cluster_workflow/slurm_outputs
+
+# Navigate to project directory
+cd /home/$USER/Neural-Field-Superres
+
+# Load modules
+module purge
+module load 2023
+module load CUDA/12.4.0
+module load Anaconda3/2023.07-2
+
+echo ""
+echo "============================================================"
+echo " Option 1: Conda Environment Setup"
+echo "============================================================"
+
+# Check if environment already exists
+if conda env list | grep -q "neural-field-superres"; then
+    echo "Conda environment 'neural-field-superres' already exists."
+    echo "To update: conda env update -f environment.yaml --prune"
+else
+    echo "Creating conda environment from environment.yaml..."
+    conda env create -f environment.yaml
+    echo "✓ Conda environment created successfully!"
+fi
+
+# Verify conda installation
+echo ""
+echo "Verifying conda environment..."
+source activate neural-field-superres
+python -c "
+import torch
+import lightning
+import xarray
+import cartopy
+import wandb
+print(f'PyTorch: {torch.__version__}')
+print(f'CUDA available: {torch.cuda.is_available()}')
+print(f'Lightning: {lightning.__version__}')
+print(f'Xarray: {xarray.__version__}')
+print('✓ All packages imported successfully!')
+"
+conda deactivate
+
+echo ""
+echo "============================================================"
+echo " Option 2: UV/Pip Environment Setup (Alternative)"
+echo "============================================================"
+
+# Check if uv is available
+if command -v uv &> /dev/null; then
+    echo "Setting up uv virtual environment..."
+    
+    # Create virtual environment
+    mkdir -p ~/.venvs
+    if [ ! -d ~/.venvs/nfsr ]; then
+        uv venv ~/.venvs/nfsr --python 3.11
+    fi
+    
+    # Install PyTorch with CUDA first
+    source ~/.venvs/nfsr/bin/activate
+    uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+    
+    # Install project dependencies
+    uv pip install -e .
+    
+    echo "✓ UV environment created at ~/.venvs/nfsr"
+    deactivate
+else
+    echo "uv not found. To install uv: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "Skipping uv setup."
+fi
+
+echo ""
+echo "============================================================"
+echo " Setup Complete: $(date)"
+echo "============================================================"
+echo ""
+echo "To use conda environment:"
+echo "  source activate neural-field-superres"
+echo ""
+echo "To use uv environment:"
+echo "  source ~/.venvs/nfsr/bin/activate"
+echo ""
+echo "To run training:"
+echo "  python -m src.train fit --config config/default_europe.yaml"
+echo ""

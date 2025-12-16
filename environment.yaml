@@ -1,0 +1,52 @@
+# Neural Field Super-Resolution - Conda Environment
+# =================================================
+# Create: conda env create -f environment.yaml
+# Activate: conda activate neural-field-superres
+# Update: conda env update -f environment.yaml --prune
+#
+# For Snellius cluster:
+#   module load 2023
+#   module load Anaconda3/2023.07-2
+#   conda env create -f environment.yaml
+
+name: neural-field-superres
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python
+  - python=3.11
+  
+  # PyTorch with CUDA 12.4 (Snellius A100)
+  - pytorch>=2.4.0
+  - pytorch-cuda=12.4
+  - torchvision
+  - torchaudio
+  
+  # Lightning
+  - lightning>=2.4.0
+  - jsonargparse[signatures]>=4.27.7  # Required for LightningCLI
+  
+  # Data handling
+  - numpy>=1.24.0
+  - pandas>=2.0.0
+  - xarray>=2024.1.0
+  - zarr>=2.16.0
+  - dask  # For parallel data loading
+  - h5netcdf  # NetCDF backend
+  
+  # Visualization
+  - matplotlib>=3.7.0
+  - cartopy>=0.22.0  # Geographic projections (via conda-forge)
+  
+  # Experiment tracking
+  - wandb>=0.16.0
+  
+  # Development tools
+  - pip
+  - pip:
+    # Any pip-only packages can go here
+    - einops>=0.7.0

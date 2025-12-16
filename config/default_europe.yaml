@@ -27,6 +27,9 @@ model:
   k_nearest: 9                        # 3x3 neighbors for analytical grid KNN
   use_gridded_knn: true               # Use fast analytical KNN for regular grids
   roll_lon: false                     # Longitude wraparound (set true for global models)
+
+  compile_model: False                # Enable torch.compile for speedup
+  compile_mode: "default"             # default, reduce-overhead, max-autotune
   
   # Position encoding
   use_rope: false
@@ -48,10 +51,17 @@ model:
 data:
   # Paths
   latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
-  # Full merged dataset (2018-2020):
   hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
-  # Partial data (Jan-Jun 2018 only):
-  # hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
+  static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
+
+  # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
+  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
+  # static_zarr_path: /projects/prjs1858/static_hres_europe_v3.zarr
+  # zarr_format: 3  # Enable v3 mode with fallback
+
+  static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
+  statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json
+
   
   # Surface variables
   variables:
@@ -59,12 +69,10 @@ data:
     - "msl"                           # Mean sea level pressure
   
   # Query sampling - number of HRES points to sample per timestep
-  # Full Europe has ~3200 latent tokens (vs 375 for Scandinavia) - reduce samples to fit in memory
   num_query_samples: 4096
   
   # Train/val split
-  val_months: 3                       # Reduced for partial data
-  # val_months: 3                     # Use 3 months for full dataset
+  val_months: 3
   
   # DataLoader
   batch_size: 16
@@ -76,18 +84,7 @@ data:
   
   # static feature normalization
   normalize_static_features: true
-  # Full merged dataset statistics:
-  statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json
-  # Partial dataset statistics (2018 only):
-  # statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json
-  
-  # Auxiliary features (optional)
-  # Europe-sliced static (create when needed):
-  # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
-  # Global static (available now):
-  static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
   static_variables: ["z", "lsm", "slt"]
-  static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
   use_static_features: true
   
   # Region filtering - Full Europe (no filtering)

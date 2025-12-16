@@ -27,7 +27,7 @@ module load CUDA/12.4.0
 module load Anaconda3/2023.07-2
 
 # Activate conda environment
-source activate aurora-highres
+source activate neural-field-superres
 
 # Navigate to project directory
 cd /home/$USER/Neural-Field-Superres
