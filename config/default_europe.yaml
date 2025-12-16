@@ -49,11 +49,17 @@ model:
 
 # Data configuration
 data:
-  # Paths
-  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
-  hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
-  static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
+  # Paths (SquashFS mounted)
+  latent_zarr_path: /projects/prjs1858/sqsh_mounts/latents
+  hres_zarr_path: /projects/prjs1858/sqsh_mounts/hres
+  static_zarr_path: /projects/prjs1858/sqsh_mounts/static
 
+  # Original zarr paths (direct access, slower I/O)
+  # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
+  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
+  # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
+
+  # Zarr v3 paths (if using v3 format)
   # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
   # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
   # static_zarr_path: /projects/prjs1858/static_hres_europe_v3.zarr
