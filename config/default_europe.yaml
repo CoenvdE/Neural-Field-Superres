@@ -57,7 +57,7 @@ data:
   # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
   # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
   # static_zarr_path: /projects/prjs1858/static_hres_europe_v3.zarr
-  # zarr_format: 3  # Enable v3 mode with fallback
+  zarr_format: 3  # Enable v3 mode with fallback
 
   static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
   statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json
