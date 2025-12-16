@@ -33,7 +33,7 @@ model:
   
   # Position encoding
   use_rope: false
-  pos_init_std: 0.02
+  pos_init_std: 1.0  # Important: higher values enable fine spatial detail (was 0.02)
   
   # Optimizer
   learning_rate: 1.0e-4

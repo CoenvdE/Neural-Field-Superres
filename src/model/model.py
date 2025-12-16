@@ -70,6 +70,7 @@ class NeuralFieldSuperRes(nn.Module):
 
         # Decoder
         self.decoder_layers = nn.ModuleList()
+        self.decoder_norms = nn.ModuleList()  # LayerNorm for residual connections
         for _ in range(num_decoder_layers):
             if decoder_type == 'knn_cross':
                 self.decoder_layers.append(
@@ -84,13 +85,15 @@ class NeuralFieldSuperRes(nn.Module):
                         roll_lon=roll_lon,
                     )
                 )
+                self.decoder_norms.append(nn.LayerNorm(num_hidden_features))
 
         # Final projection to output dimension
         # If predicting variance, output is [mean, log_var] so double the channels
         output_dim = num_output_features * 2 if predict_variance else num_output_features
         self.final_proj = nn.Linear(num_hidden_features, output_dim)
 
-        self.init_query_vector = nn.Parameter(torch.randn(1, num_hidden_features))
+        # Scale init_query_vector to prevent dominating positional encodings
+        self.init_query_vector = nn.Parameter(torch.randn(1, num_hidden_features) * 0.02)
 
     def forward(
         self,
@@ -128,7 +131,7 @@ class NeuralFieldSuperRes(nn.Module):
         
         # Decoder: cross-attention from query positions to latents
         #TODO: all positional information is now only used here
-        for layer in self.decoder_layers:
+        for i, layer in enumerate(self.decoder_layers):
             delta, _ = layer(
                 query=query_hidden,
                 query_pos=query_pos,
@@ -136,7 +139,7 @@ class NeuralFieldSuperRes(nn.Module):
                 context_pos=latent_pos,
                 context_grid_shape=latent_grid_shape,
             )
-            query_hidden = query_hidden + delta
+            query_hidden = self.decoder_norms[i](query_hidden + delta)
 
         # Project to output dimension
         return self.final_proj(query_hidden)
