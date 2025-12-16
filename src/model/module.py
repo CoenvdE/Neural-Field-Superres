@@ -256,11 +256,9 @@ class NeuralFieldSuperResModule(L.LightningModule):
         
         # Compute additional metrics using mean predictions
         with torch.no_grad():
-            mse = nn.functional.mse_loss(pred_mean, query_fields)
-            rmse = torch.sqrt(mse)
+            rmse = torch.sqrt(nn.functional.mse_loss(pred_mean, query_fields))
 
         self.log(f"{stage}/loss", loss, prog_bar=True, sync_dist=True)
-        self.log(f"{stage}/mse", mse, sync_dist=True)
         self.log(f"{stage}/rmse", rmse, sync_dist=True)
         
         return {"loss": loss}

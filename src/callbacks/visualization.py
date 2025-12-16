@@ -198,7 +198,7 @@ class HRESVisualizationCallback(L.Callback):
                 
                 # Log to WandB via PyTorch Lightning logger
                 pl_module.logger.log_image(
-                    key="val/hres_predictions",
+                    key="plots/val_hres_predictions",
                     images=[fig]
                 )
                 plt.close(fig)
@@ -215,7 +215,7 @@ class HRESVisualizationCallback(L.Callback):
                 if aux_fig is not None:
                     # Log to WandB via PyTorch Lightning logger
                     pl_module.logger.log_image(
-                        key="val/auxiliary_features",
+                        key="plots/auxiliary_features",
                         images=[aux_fig]
                     )
                     plt.close(aux_fig)
