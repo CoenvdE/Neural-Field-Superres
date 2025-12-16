@@ -16,6 +16,7 @@ model:
 
   # Auxiliary features (z, lsm, slt)
   num_auxiliary_features: 3           # 0 = disabled, 3 = enabled
+  aux_embed_dim: 64                   # Embedding dimension for auxiliary features
   
   # Processor
   use_self_attention: false
