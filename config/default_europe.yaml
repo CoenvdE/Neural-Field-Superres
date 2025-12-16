@@ -1,6 +1,6 @@
-# Neural Field Super-Resolution - Experiment Configuration
-# ==========================================================
-# WITH static variables, Heteroscedastic NLL loss
+# Neural Field Super-Resolution - Configuration
+# ==============================================
+# Surface-only model for 2 HRES variables (2t, msl).
 # Full Europe region (~30-70°N, -30-50°E)
 # lightning==2.5.5
 
@@ -15,7 +15,7 @@ model:
   num_heads: 8
 
   # Auxiliary features (z, lsm, slt)
-  num_auxiliary_features: 3           # ENABLED - static features
+  num_auxiliary_features: 3           # 0 = disabled, 3 = enabled
   
   # Processor
   use_self_attention: false
@@ -23,7 +23,7 @@ model:
   
   # Decoder
   decoder_type: knn_cross
-  num_decoder_layers: 3
+  num_decoder_layers: 1
   k_nearest: 9                        # 3x3 neighbors for analytical grid KNN
   use_gridded_knn: true               # Use fast analytical KNN for regular grids
   roll_lon: false                     # Longitude wraparound (set true for global models)
@@ -45,20 +45,26 @@ model:
   scheduler_eta_min: 1.0e-6
   
   # Loss function
-  loss_type: heteroscedastic_nll      # Heteroscedastic NLL (predicts uncertainty)
+  # loss_type: heteroscedastic_nll # mse, gaussian_nll or heteroscedastic_nll
+  loss_type: mse
 
 # Data configuration
 data:
-  # ==== SquashFS mounted paths ====
-  latent_zarr_path: /projects/prjs1858/sqsh_mounts/latents
-  hres_zarr_path: /projects/prjs1858/sqsh_mounts/hres
-  static_zarr_path: /projects/prjs1858/sqsh_mounts/static
+  # Paths (SquashFS mounted)
+  # latent_zarr_path: /projects/prjs1858/sqsh_mounts/latents
+  # hres_zarr_path: /projects/prjs1858/sqsh_mounts/hres
+  # static_zarr_path: /projects/prjs1858/sqsh_mounts/static
 
-  # ==== Zarr v3 paths (commented out) ====
-  # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
-  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
-  # static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
-  # zarr_format: 3  # Enable v3 mode with fallback
+  # Original zarr paths (direct access, slower I/O)
+  # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
+  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020.zarr
+  # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
+
+  # Zarr v3 paths (if using v3 format)
+  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
+  hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
+  static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
+  zarr_format: 3  # Enable v3 mode with fallback
 
   static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
   statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json
@@ -77,7 +83,7 @@ data:
   
   # DataLoader
   batch_size: 16
-  num_workers: 10
+  num_workers: 7
   pin_memory: true
   normalize_coords: true
   prefetch_factor: 4                    # Pre-load more batches
@@ -86,7 +92,7 @@ data:
   # static feature normalization
   normalize_static_features: true
   static_variables: ["z", "lsm", "slt"]
-  use_static_features: true             # ENABLED - static features
+  use_static_features: true
   
   # Region filtering - Full Europe (no filtering)
   region_lat_min: 30
@@ -107,7 +113,7 @@ trainer:
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
-        dirpath: checkpoints/exp_static_nll/
+        dirpath: checkpoints/
         filename: "epoch={epoch:03d}-val_loss={val/loss:.4f}"
         monitor: val/loss
         mode: min
@@ -135,6 +141,7 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: neural-field-superres
-      name: static-nll-3layer
+      name: europe-surface-2vars-static
       save_dir: logs/
       log_model: false
+
