@@ -76,7 +76,7 @@ data:
   
   # DataLoader
   batch_size: 16
-  num_workers: 0
+  num_workers: 7
   pin_memory: true
   normalize_coords: true
   prefetch_factor: 4                    # Pre-load more batches
