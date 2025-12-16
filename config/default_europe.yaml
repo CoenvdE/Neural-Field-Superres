@@ -45,7 +45,8 @@ model:
   scheduler_eta_min: 1.0e-6
   
   # Loss function
-  loss_type: heteroscedastic_nll # mse, gaussian_nll or heteroscedastic_nll
+  # loss_type: heteroscedastic_nll # mse, gaussian_nll or heteroscedastic_nll
+  loss_type: mse
 
 # Data configuration
 data:
@@ -62,7 +63,7 @@ data:
   # Zarr v3 paths (if using v3 format)
   latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
   hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
-  static_zarr_path: /projects/prjs1858/static_hres_europe_v3.zarr
+  static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
   zarr_format: 3  # Enable v3 mode with fallback
 
   static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
