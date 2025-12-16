@@ -42,7 +42,7 @@ git pull
 # Uncomment the lines below to enable SquashFS mounting
 
 DATA_DIR="/projects/prjs1858"
-MOUNT_DIR="/projects/prjs1858/sqsh_mounts"
+MOUNT_DIR="$TMPDIR/sqsh_mounts"
 mkdir -p "$MOUNT_DIR"/{hres,latents,static}
 
 echo "Mounting SquashFS images..."
@@ -57,7 +57,7 @@ cleanup() {
     fusermount -u "$MOUNT_DIR/latents" 2>/dev/null
     fusermount -u "$MOUNT_DIR/static" 2>/dev/null
 }
-# trap cleanup EXIT
+trap cleanup EXIT
 # ==== END SquashFS ====
 
 # Run training
@@ -65,7 +65,10 @@ echo ""
 echo "============================================================"
 echo " Starting training: Static Variables + Heteroscedastic NLL Loss"
 echo "============================================================"
-python -m src.train fit --config config/exp_static_nll.yaml
+python -m src.train fit --config config/exp_static_nll.yaml \
+    --data.latent_zarr_path="$MOUNT_DIR/latents" \
+    --data.hres_zarr_path="$MOUNT_DIR/hres" \
+    --data.static_zarr_path="$MOUNT_DIR/static"
 
 echo ""
 echo "============================================================"
