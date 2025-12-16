@@ -133,7 +133,7 @@ trainer:
     
     - class_path: src.callbacks.visualization.HRESVisualizationCallback
       init_args:
-        log_every_n_epochs: 5
+        log_every_n_epochs: 1
         chunk_size: 8192
 
   logger:
