@@ -1,0 +1,73 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --job-name=Exp-NoStatic-NLL
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=12
+#SBATCH --time=02:00:00
+#SBATCH --output=cluster_workflow/slurm_outputs/exp_nostatic_nll_%A.out
+#SBATCH --error=cluster_workflow/slurm_outputs/exp_nostatic_nll_%A.err
+
+# Experiment: No static variables, Heteroscedastic NLL loss
+# Full Europe region (~30-70°N, -30-50°E)
+
+mkdir -p logs
+
+echo "============================================================"
+echo " Job started: $(date)"
+echo " Node: $(hostname)"
+echo " GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo "============================================================"
+
+# Load modules
+module purge
+module load 2023
+module load CUDA/12.4.0
+module load Anaconda3/2023.07-2
+
+# Activate conda environment
+source activate neural-field-superres
+
+# Navigate to project directory
+cd /home/$USER/Neural-Field-Superres
+export PYTHONPATH=".";
+
+# Pull latest code
+echo "Pulling latest code..."
+git pull
+
+# ==== Mount SquashFS for faster I/O ====
+# NOTE: FUSE mounting is not allowed on Snellius GPFS - use Zarr v3 directly
+# (Run cluster_workflow/create_squashfs.job first in aurora-highres)
+
+# DATA_DIR="/projects/prjs1858"
+# MOUNT_DIR="$TMPDIR/sqsh_mounts"
+# mkdir -p "$MOUNT_DIR"/{hres,latents,static}
+
+# echo "Mounting SquashFS images..."
+# squashfuse "$DATA_DIR/hres_europe_2018_2020.sqsh" "$MOUNT_DIR/hres"
+# squashfuse "$DATA_DIR/latents_europe_2018_2020.sqsh" "$MOUNT_DIR/latents"
+# squashfuse "$DATA_DIR/static_hres_europe.sqsh" "$MOUNT_DIR/static"
+
+# # Cleanup function to unmount on exit
+# cleanup() {
+#     echo "Unmounting SquashFS..."
+#     fusermount -u "$MOUNT_DIR/hres" 2>/dev/null
+#     fusermount -u "$MOUNT_DIR/latents" 2>/dev/null
+#     fusermount -u "$MOUNT_DIR/static" 2>/dev/null
+# }
+# trap cleanup EXIT
+# ==== END SquashFS ====
+
+# Run training
+echo ""
+echo "============================================================"
+echo " Starting training: No Static Variables + Heteroscedastic NLL Loss"
+echo "============================================================"
+python -m src.train fit --config config/exp_nostatic_nll.yaml
+
+echo ""
+echo "============================================================"
+echo " Job completed: $(date)"
+echo "============================================================"

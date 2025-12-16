@@ -1,0 +1,140 @@
+# Neural Field Super-Resolution - Experiment Configuration
+# ==========================================================
+# NO static variables, Heteroscedastic NLL loss
+# Full Europe region (~30-70°N, -30-50°E)
+# lightning==2.5.5
+
+seed_everything: 13
+
+# Model configuration (decoder-only)
+model:
+  # Architecture
+  num_output_features: 2              # 2t and msl
+  coord_dim: 2                        # 2D: lat, lon
+  num_hidden_features: 512
+  num_heads: 8
+
+  # Auxiliary features (z, lsm, slt)
+  num_auxiliary_features: 0           # DISABLED - no static features
+  
+  # Processor
+  use_self_attention: false
+  num_processor_layers: 1
+  
+  # Decoder
+  decoder_type: knn_cross
+  num_decoder_layers: 3
+  k_nearest: 9                        # 3x3 neighbors for analytical grid KNN
+  use_gridded_knn: true               # Use fast analytical KNN for regular grids
+  roll_lon: false                     # Longitude wraparound (set true for global models)
+
+  compile_model: False                # Enable torch.compile for speedup
+  compile_mode: "default"             # default, reduce-overhead, max-autotune
+  
+  # Position encoding
+  use_rope: false
+  pos_init_std: 0.02
+  
+  # Optimizer
+  learning_rate: 1.0e-4
+  weight_decay: 0.05
+  
+  # Learning rate scheduler
+  use_scheduler: true
+  scheduler_t_max: null               # null = use trainer.max_epochs
+  scheduler_eta_min: 1.0e-6
+  
+  # Loss function
+  loss_type: heteroscedastic_nll      # Heteroscedastic NLL (predicts uncertainty)
+
+# Data configuration
+data:
+  # ==== SquashFS mounted paths (DISABLED - GPFS doesn't allow FUSE mounts) ====
+  # latent_zarr_path: /projects/prjs1858/sqsh_mounts/latents
+  # hres_zarr_path: /projects/prjs1858/sqsh_mounts/hres
+  # static_zarr_path: /projects/prjs1858/sqsh_mounts/static
+
+  # ==== Zarr v3 paths (direct access) ====
+  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
+  hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
+  static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
+  zarr_format: 3  # Enable v3 mode
+
+  static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
+  statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json
+
+  
+  # Surface variables
+  variables:
+    - "2t"                            # 2m temperature
+    - "msl"                           # Mean sea level pressure
+  
+  # Query sampling - number of HRES points to sample per timestep
+  num_query_samples: 4096
+  
+  # Train/val split
+  val_months: 3
+  
+  # DataLoader
+  batch_size: 16
+  num_workers: 10
+  pin_memory: true
+  normalize_coords: true
+  prefetch_factor: 4                    # Pre-load more batches
+  persistent_workers: true              # Avoid worker respawn overhead
+  
+  # static feature normalization
+  normalize_static_features: true
+  static_variables: ["z", "lsm", "slt"]
+  use_static_features: false            # DISABLED - no static features
+  
+  # Region filtering - Full Europe (no filtering)
+  region_lat_min: 30
+  region_lat_max: 70
+  region_lon_min: -14
+  region_lon_max: 50
+
+# Trainer configuration
+trainer:
+  accelerator: auto
+  devices: auto
+  precision: bf16-mixed
+  max_epochs: 100
+  gradient_clip_val: 1.0
+  log_every_n_steps: 10
+  num_sanity_val_steps: 1
+  
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: checkpoints/exp_nostatic_nll/
+        filename: "epoch={epoch:03d}-val_loss={val/loss:.4f}"
+        monitor: val/loss
+        mode: min
+        save_top_k: 1
+        save_last: true
+        auto_insert_metric_name: false
+    
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val/loss
+        patience: 20
+        mode: min
+        verbose: true
+    
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: epoch
+    
+    - class_path: src.callbacks.visualization.HRESVisualizationCallback
+      init_args:
+        log_every_n_epochs: 1
+        chunk_size: 8192
+
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: neural-field-superres
+      name: nostatic-nll-3layer
+      save_dir: logs/
+      log_model: false
