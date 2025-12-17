@@ -174,7 +174,7 @@ class HRESVisualizationCallback(L.Callback):
                     # if hasattr(trainer.datamodule, 'target_statistics'):
                     #     var_std = trainer.datamodule.target_statistics[var_idx]['std']
                     #     unc = unc * var_std
-                    # uncertainty_data.append(unc)
+                    uncertainty_data.append(unc)
                 
                 # Reshape to 2D grid
                 try:
