@@ -74,7 +74,7 @@ data:
     - "msl"                           # Mean sea level pressure
   
   # Query sampling - number of HRES points to sample per timestep
-  num_query_samples: 1024
+  num_query_samples: 4096
   
   # Train/val split
   val_months: 3
