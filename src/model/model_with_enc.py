@@ -1,0 +1,191 @@
+import torch
+import torch.nn as nn
+from typing import Optional
+
+from .layers import CrossAttention
+
+
+class NeuralFieldSuperRes(nn.Module):
+    """Neural Field Super-Resolution model (decoder-only, no encoder).
+    
+    Terminology:
+        - query_pos: [B, Q, coord_dim] positions to predict at (input)
+        - query_auxiliary_features: [B, Q, num_aux] optional auxiliary features (z, lsm, slt)
+        - query_fields: [B, Q, num_output] target values (NOT used as input, only for loss)
+    """
+    
+    def __init__(
+        self,
+        num_output_features: int,
+        coord_dim: int = 2,
+        num_hidden_features: int = 256,
+        num_heads: int = 8,
+        use_self_attention: bool = False,
+        num_processor_layers: int = 1,
+        decoder_type: str = 'knn_cross',
+        num_decoder_layers: int = 1,
+        use_processor: bool = False,
+        use_rope: bool = False, 
+        num_auxiliary_features: int = 0,  # 0 = disabled
+        pos_init_std: float = 0.02,  # For CrossAttention position encoding
+        predict_variance: bool = False,  # If True, output both mean and log-variance
+        k_nearest: int = 16,  # Number of nearest neighbors for cross-attention
+        use_gridded_knn: bool = False,  # Use analytical KNN for regular grids
+        roll_lon: bool = False,  # Longitude wraparound for global models
+
+        num_encoder_layers: int = 1,
+        encoder_type: str = 'knn_cross',
+        num_latents: int = 1,
+    ):
+        super().__init__()
+        self.num_output_features = num_output_features
+        self.coord_dim = coord_dim
+        self.num_hidden_features = num_hidden_features
+        self.num_heads = num_heads
+        self.num_processor_layers = num_processor_layers
+        self.num_decoder_layers = num_decoder_layers
+        self.decoder_type = decoder_type
+        self.use_self_attention = use_self_attention
+        self.use_rope = use_rope
+        self.use_processor = use_processor
+        self.num_auxiliary_features = num_auxiliary_features
+        self.pos_init_std = pos_init_std
+        self.predict_variance = predict_variance
+        self.k_nearest = k_nearest
+        self.use_gridded_knn = use_gridded_knn
+        self.roll_lon = roll_lon
+
+        # extra for encoder
+        self.num_encoder_layers = num_encoder_layers
+        self.encoder_type = encoder_type
+        self.num_latents = num_latents
+        
+        
+        # If auxiliary features exist, project them to hidden_dim
+        if num_auxiliary_features > 0:
+            # Input is pos_encoding (hidden_dim) + aux_features (num_aux)
+            self.query_proj = nn.Linear(
+                num_auxiliary_features, num_hidden_features
+            )
+        else:
+            self.query_proj = None  # No projection needed
+
+        self.encoder_layers = nn.ModuleList()
+        self.encoder_norms = nn.ModuleList()  # LayerNorm for residual connections
+        for _ in range(num_encoder_layers):
+            if encoder_type == 'knn_cross':
+                self.encoder_layers.append(
+                    CrossAttention(
+                        num_hidden_features,
+                        num_heads,
+                        coord_dim=coord_dim,
+                        pos_init_std=self.pos_init_std,
+                        positional_information_type="rope" if use_rope else "rff",
+                        k_nearest=k_nearest,
+                        use_gridded_knn=use_gridded_knn,
+                        roll_lon=roll_lon,
+                    )
+                )
+                self.encoder_norms.append(nn.LayerNorm(num_hidden_features))
+
+        # Processor (Self-Attention on Latents)
+        if use_self_attention:
+            self.processor = nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(
+                    d_model=num_hidden_features, nhead=num_heads, batch_first=True),
+                num_layers=num_processor_layers
+            )
+
+        # Decoder
+        self.decoder_layers = nn.ModuleList()
+        self.decoder_norms = nn.ModuleList()  # LayerNorm for residual connections
+        for _ in range(num_decoder_layers):
+            if decoder_type == 'knn_cross':
+                self.decoder_layers.append(
+                    CrossAttention(
+                        num_hidden_features,
+                        num_heads,
+                        coord_dim=coord_dim,
+                        pos_init_std=self.pos_init_std,
+                        positional_information_type="rope" if use_rope else "rff",
+                        k_nearest=k_nearest,
+                        use_gridded_knn=use_gridded_knn,
+                        roll_lon=roll_lon,
+                    )
+                )
+                self.decoder_norms.append(nn.LayerNorm(num_hidden_features))
+
+        # Final projection to output dimension
+        # If predicting variance, output is [mean, log_var] so double the channels
+        output_dim = num_output_features * 2 if predict_variance else num_output_features
+        self.final_proj = nn.Linear(num_hidden_features, output_dim)
+
+        # Scale init_query_vector to prevent dominating positional encodings
+        self.init_query_vector = nn.Parameter(torch.randn(1, num_hidden_features) * 0.02) #NOTE: [1, D]
+
+        # extra for encoder
+        self.init_latent_vector = nn.Parameter(torch.randn(num_latents, num_hidden_features) * 0.02) #NOTE: [Z, D]
+        self.init_latent_pos = nn.Parameter(torch.randn(num_latents, coord_dim) * 0.02) #NOTE: [Z, coord_dim]
+        #TODO: implement init query positions as the positions of the original latents (and the number)
+
+    def forward(
+        self,
+        low_res_pos: torch.Tensor,
+        low_res_features: torch.Tensor,
+        query_pos: torch.Tensor,
+        # latents: torch.Tensor,
+        # latent_pos: torch.Tensor,
+        query_auxiliary_features: Optional[torch.Tensor] = None,
+        latent_grid_shape: Optional[torch.Tensor] = None,  # [2] for analytical KNN
+    ) -> torch.Tensor:
+        """
+        Forward pass (decoder-only mode).
+        
+        Args:
+            query_pos: [B, Q, coord_dim] positions to predict at
+            latents: [B, Z, D_latent] latent features from Aurora encoder
+            latent_pos: [B, Z, coord_dim] latent positions
+            query_auxiliary_features: [B, Q, num_aux] optional auxiliary features (z, lsm, slt)
+            latent_grid_shape: [2] tensor (num_lat, num_lon) for analytical KNN
+        
+        Returns:
+            predictions: [B, Q, num_output_features] predicted field values
+        """
+        # extra for encoder
+        # Processor (self-attention on latents)
+        latents = self.init_latent_vector.expand(query_pos.shape[0], -1, -1) #NOTE: [B, Z, D]
+        latent_pos = self.init_latent_pos.expand(query_pos.shape[0], -1, -1) #NOTE: [B, Z, coord_dim] #TODO: fix that this is good
+
+        # Step 1: Encode low resolution features into latent space
+        for i, encoder_layer in enumerate(self.encoder_layers):
+            delta, _ = encoder_layer(
+                query=latents,
+                query_pos=latent_pos,
+                context=low_res_features,
+                context_pos=low_res_pos,
+                context_grid_shape=latent_grid_shape,
+            )
+            latents = self.encoder_norms[i](latents + delta)
+
+        # Build query input
+        query_hidden = self.init_query_vector.expand(query_pos.shape[0], query_pos.shape[1], -1) #NOTE: [B, Q, D]
+        
+        # Step 2: Concatenate with auxiliary features if present
+        if query_auxiliary_features is not None:
+            query_projected_auxiliary_features = self.query_proj(query_auxiliary_features)
+            query_hidden = query_hidden + query_projected_auxiliary_features
+        
+        # Decoder: cross-attention from query positions to latents
+        #TODO: all positional information is now only used here
+        for i, layer in enumerate(self.decoder_layers):
+            delta, _ = layer(
+                query=query_hidden,
+                query_pos=query_pos,
+                context=latents,
+                context_pos=latent_pos,
+                context_grid_shape=latent_grid_shape,
+            )
+            query_hidden = self.decoder_norms[i](query_hidden + delta)
+
+        # Project to output dimension
+        return self.final_proj(query_hidden)
