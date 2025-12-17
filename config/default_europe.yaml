@@ -16,7 +16,6 @@ model:
 
   # Auxiliary features (z, lsm, slt)
   num_auxiliary_features: 3           # 0 = disabled, 3 = enabled
-  aux_embed_dim: 64                   # Embedding dimension for auxiliary features
   
   # Processor
   use_self_attention: false
@@ -62,13 +61,17 @@ data:
   # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
 
   # Zarr v3 paths (if using v3 format)
-  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
-  hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
-  static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
-  zarr_format: 3  # Enable v3 mode with fallback
+  # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
+  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
+  # static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
+  # zarr_format: 3  # Enable v3 mode with fallback
+
+  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
+  hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
+  static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
 
   static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
-  statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json
+  statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json
 
   
   # Surface variables

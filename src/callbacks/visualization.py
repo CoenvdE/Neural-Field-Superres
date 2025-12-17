@@ -156,8 +156,7 @@ class HRESVisualizationCallback(L.Callback):
                 pred = predictions[0, :, var_idx].cpu().numpy()    # [Q]
                 target = query_fields[0, :, var_idx].numpy()       # [Q]
                 
-                # NOTE: Visualization is now in NORMALIZED space (not denormalized)
-                # Denormalize predictions and targets back to original scale
+                # # Denormalize predictions and targets back to original scale
                 # if hasattr(trainer.datamodule, 'denormalize_targets'):
                 #     pred = trainer.datamodule.denormalize_targets(
                 #         torch.from_numpy(pred).unsqueeze(-1), var_idx
@@ -168,14 +167,14 @@ class HRESVisualizationCallback(L.Callback):
                 # else:
                 #     raise ValueError("Denormalize targets not implemented for this datamodule")
                 
-                # Process uncertainty if available (also in normalized space)
+                # # Process uncertainty if available
                 if uncertainty is not None:
                     unc = uncertainty[0, :, var_idx].cpu().numpy()  # [Q]
                     # Denormalize uncertainty: multiply by variable std
                     # if hasattr(trainer.datamodule, 'target_statistics'):
                     #     var_std = trainer.datamodule.target_statistics[var_idx]['std']
                     #     unc = unc * var_std
-                    uncertainty_data.append(unc)
+                    # uncertainty_data.append(unc)
                 
                 # Reshape to 2D grid
                 try:

@@ -54,7 +54,6 @@ class NeuralFieldSuperResModule(L.LightningModule):
         
         # Auxiliary features (optional, e.g., z/lsm/slt)
         num_auxiliary_features: int = 0,  # 0 = disabled, 3 = z/lsm/slt
-        aux_embed_dim: int = 64,          # Embedding dimension for auxiliary features
         
         # Optimizer settings
         learning_rate: float = 1e-4,
@@ -104,7 +103,6 @@ class NeuralFieldSuperResModule(L.LightningModule):
             use_rope=use_rope,
             pos_init_std=pos_init_std,
             num_auxiliary_features=num_auxiliary_features,
-            aux_embed_dim=aux_embed_dim,
             predict_variance=predict_variance,
             k_nearest=k_nearest,
             use_gridded_knn=use_gridded_knn,
