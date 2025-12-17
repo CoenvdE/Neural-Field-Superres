@@ -23,9 +23,9 @@ model:
   
   # Decoder
   decoder_type: knn_cross
-  num_decoder_layers: 3
+  num_decoder_layers: 2
   k_nearest: 9                        # 3x3 neighbors for analytical grid KNN
-  use_gridded_knn: true               # Use fast analytical KNN for regular grids
+  use_gridded_knn: false               # Use fast analytical KNN for regular grids
   roll_lon: false                     # Longitude wraparound (set true for global models)
 
   compile_model: False                # Enable torch.compile for speedup
@@ -55,17 +55,17 @@ data:
   # static_zarr_path: /projects/prjs1858/sqsh_mounts/static
 
   # Zarr v3 paths (if using v3 format)
-  # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
-  # hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
-  # static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
-  # zarr_format: 3  # Enable v3 mode with fallback
+  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020_v3.zarr
+  hres_zarr_path: /projects/prjs1858/hres_europe_2018_2020_v3.zarr
+  static_zarr_path: /projects/prjs1858/static_hres_europe_v3_rechunked.zarr
+  zarr_format: 3  # Enable v3 mode with fallback
 
-  latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
-  hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
-  static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
+  # latent_zarr_path: /projects/prjs1858/latents_europe_2018_2020.zarr
+  # hres_zarr_path: /projects/prjs1858/hres_europe_2018.zarr
+  # static_zarr_path: /projects/prjs1858/static_hres_europe.zarr
 
   static_statistics_path: /projects/prjs1858/static_hres_europe_statistics.json
-  statistics_path: /projects/prjs1858/hres_europe_2018_statistics.json #2018
+  statistics_path: /projects/prjs1858/hres_europe_2018_2020_statistics.json 
 
   
   # Surface variables
@@ -74,13 +74,13 @@ data:
     - "msl"                           # Mean sea level pressure
   
   # Query sampling - number of HRES points to sample per timestep
-  num_query_samples: 4096
+  num_query_samples: 1024
   
   # Train/val split
   val_months: 3
   
   # DataLoader
-  batch_size: 16
+  batch_size: 32
   num_workers: 10
   pin_memory: true
   normalize_coords: true
@@ -95,7 +95,7 @@ data:
   # Region filtering - Full Europe (no filtering)
   region_lat_min: 30
   region_lat_max: 70
-  region_lon_min: -14
+  region_lon_min: -30
   region_lon_max: 50
 
 # Trainer configuration
