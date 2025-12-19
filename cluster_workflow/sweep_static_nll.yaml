@@ -1,0 +1,23 @@
+program: src/train.py
+method: grid
+metric:
+  name: val/loss
+  goal: minimize
+
+command:
+  - ${env}
+  - python
+  - -m
+  - src.train
+  - fit
+  - --config
+  - config/exp_static_nll.yaml
+  - ${args}
+
+parameters:
+  model.pos_init_std:
+    values: [1, 5, 10, 15, 20]
+  model.num_decoder_layers:
+    values: [1, 2, 3]
+  model.num_heads:
+    values: [8, 16]

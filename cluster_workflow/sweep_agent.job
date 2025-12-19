@@ -1,0 +1,61 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --job-name=Sweep-Agent
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=12
+#SBATCH --time=06:00:00
+#SBATCH --output=cluster_workflow/slurm_outputs/sweep_agent_%A.out
+#SBATCH --error=cluster_workflow/slurm_outputs/sweep_agent_%A.err
+
+# WandB Sweep Agent
+# Usage: SWEEP_ID=<sweep-id> sbatch cluster_workflow/sweep_agent.job
+# Example: SWEEP_ID=abc123 sbatch cluster_workflow/sweep_agent.job
+
+mkdir -p logs
+mkdir -p cluster_workflow/slurm_outputs
+
+echo "============================================================"
+echo " Sweep Agent started: $(date)"
+echo " Node: $(hostname)"
+echo " GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo " Sweep ID: ${SWEEP_ID:-NOT SET}"
+echo "============================================================"
+
+# Check if SWEEP_ID is provided
+if [ -z "$SWEEP_ID" ]; then
+    echo "ERROR: SWEEP_ID environment variable not set!"
+    echo "Usage: SWEEP_ID=<sweep-id> sbatch cluster_workflow/sweep_agent.job"
+    exit 1
+fi
+
+# Load modules
+module purge
+module load 2023
+module load CUDA/12.4.0
+module load Anaconda3/2023.07-2
+
+# Activate conda environment
+source activate neural-field-superres
+
+# Navigate to project directory
+cd /home/$USER/Neural-Field-Superres
+export PYTHONPATH=".";
+
+# Pull latest code
+echo "Pulling latest code..."
+git pull
+
+# Run sweep agent
+echo ""
+echo "============================================================"
+echo " Starting WandB Sweep Agent"
+echo " Sweep ID: $SWEEP_ID"
+echo "============================================================"
+wandb agent $SWEEP_ID
+
+echo ""
+echo "============================================================"
+echo " Sweep Agent completed: $(date)"
+echo "============================================================"
