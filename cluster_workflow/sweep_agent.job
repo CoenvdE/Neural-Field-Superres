@@ -10,8 +10,9 @@
 #SBATCH --error=cluster_workflow/slurm_outputs/sweep_agent_%A.err
 
 # WandB Sweep Agent
-# Usage: SWEEP_ID=<sweep-id> sbatch cluster_workflow/sweep_agent.job
-# Example: SWEEP_ID=abc123 sbatch cluster_workflow/sweep_agent.job
+# Usage: sbatch cluster_workflow/sweep_agent.job
+
+SWEEP_ID="coenvdelsen/Neural-Field-Superres-src/bidxxev8"
 
 mkdir -p logs
 mkdir -p cluster_workflow/slurm_outputs
@@ -22,13 +23,6 @@ echo " Node: $(hostname)"
 echo " GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 echo " Sweep ID: ${SWEEP_ID:-NOT SET}"
 echo "============================================================"
-
-# Check if SWEEP_ID is provided
-if [ -z "$SWEEP_ID" ]; then
-    echo "ERROR: SWEEP_ID environment variable not set!"
-    echo "Usage: SWEEP_ID=<sweep-id> sbatch cluster_workflow/sweep_agent.job"
-    exit 1
-fi
 
 # Load modules
 module purge
