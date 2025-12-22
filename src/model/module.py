@@ -51,6 +51,7 @@ class NeuralFieldSuperResModule(L.LightningModule):
         k_nearest: int = 16,  # Number of nearest neighbors for cross-attention
         use_gridded_knn: bool = False,  # Use analytical KNN for regular grids
         roll_lon: bool = False,  # Longitude wraparound for global models
+        lat_ascending: bool = True,  # Latitude order for gridded KNN
         
         # Auxiliary features (optional, e.g., z/lsm/slt)
         num_auxiliary_features: int = 0,  # 0 = disabled, 3 = z/lsm/slt
@@ -107,6 +108,7 @@ class NeuralFieldSuperResModule(L.LightningModule):
             k_nearest=k_nearest,
             use_gridded_knn=use_gridded_knn,
             roll_lon=roll_lon,
+            lat_ascending=lat_ascending,
         )
         
         # Loss function and likelihood
