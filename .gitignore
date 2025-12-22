@@ -65,3 +65,4 @@ plots/
 
 wandb/
 checkpoints 
+cluster_workflow/slurm_outputs/
