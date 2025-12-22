@@ -78,6 +78,8 @@ class CrossAttention(nn.Module):
         context: torch.Tensor,
         context_pos: torch.Tensor,
         context_grid_shape: Optional[torch.Tensor] = None,  # for analytical KNN
+        query_pos_enc: Optional[torch.Tensor] = None,  # Pre-computed position encoding
+        context_pos_enc: Optional[torch.Tensor] = None,  # Pre-computed position encoding
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Project query tokens onto the k nearest context tokens.
         
@@ -90,11 +92,19 @@ class CrossAttention(nn.Module):
         """
 
         # Add position encoding to query and context features
+        # Use pre-computed encodings if provided (major optimization!)
         if self.positional_information_type == "rff":
-            query_pos_enc = self.pos_encoder(query_pos)
-            context_pos_enc = self.pos_encoder(context_pos)
-            query = query + query_pos_enc
-            context = context + context_pos_enc
+            if query_pos_enc is not None:
+                # Use pre-computed position encodings
+                query = query + query_pos_enc
+            else:
+                # Compute on-the-fly (slower, for backwards compatibility)
+                query = query + self.pos_encoder(query_pos)
+            
+            if context_pos_enc is not None:
+                context = context + context_pos_enc
+            else:
+                context = context + self.pos_encoder(context_pos)
         elif self.positional_information_type == "rope":
             # query_cos, query_sin = self.pos_encoder(query_pos)
             # context_cos, context_sin = self.pos_encoder(context_pos)

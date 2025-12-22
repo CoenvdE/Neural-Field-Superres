@@ -3,6 +3,7 @@ import torch.nn as nn
 from typing import Optional
 
 from .layers import CrossAttention
+from .pos_emb import CoordinateEncoder
 
 
 class NeuralFieldSuperRes(nn.Module):
@@ -89,6 +90,16 @@ class NeuralFieldSuperRes(nn.Module):
                     )
                 )
                 self.decoder_norms.append(nn.LayerNorm(num_hidden_features))
+        
+        # Shared position encoder for pre-computing position embeddings
+        # This is much more efficient than computing in each layer
+        self.shared_pos_encoder = CoordinateEncoder(
+            coord_dim=coord_dim,
+            embed_dim=num_hidden_features,
+            coordinate_system="cartesian",
+            learnable_coefficients=True,
+            init_std=pos_init_std,
+        )
 
         # Final projection to output dimension
         # If predicting variance, output is [mean, log_var] so double the channels
@@ -132,14 +143,20 @@ class NeuralFieldSuperRes(nn.Module):
             query_projected_auxiliary_features = self.query_proj(query_auxiliary_features)
             query_hidden = query_hidden + query_projected_auxiliary_features
         
+        # Pre-compute position encodings ONCE (shared across all decoder layers)
+        # This is a major optimization - previously computed per layer!
+        query_pos_enc = self.shared_pos_encoder(query_pos)    # [B, Q, D]
+        context_pos_enc = self.shared_pos_encoder(latent_pos)  # [B, Z, D]
+        
         # Decoder: cross-attention from query positions to latents
-        #TODO: all positional information is now only used here
         for i, layer in enumerate(self.decoder_layers):
             delta, _ = layer(
                 query=query_hidden,
                 query_pos=query_pos,
+                query_pos_enc=query_pos_enc,        # Pass pre-computed encoding
                 context=latents,
                 context_pos=latent_pos,
+                context_pos_enc=context_pos_enc,    # Pass pre-computed encoding
                 context_grid_shape=latent_grid_shape,
             )
             query_hidden = self.decoder_norms[i](query_hidden + delta)
