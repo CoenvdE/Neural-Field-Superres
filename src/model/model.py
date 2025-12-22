@@ -32,6 +32,7 @@ class NeuralFieldSuperRes(nn.Module):
         k_nearest: int = 16,  # Number of nearest neighbors for cross-attention
         use_gridded_knn: bool = False,  # Use analytical KNN for regular grids
         roll_lon: bool = False,  # Longitude wraparound for global models
+        lat_ascending: bool = False,  # Set False for ERA5/Aurora (descending lat order)
     ):
         super().__init__()
         self.num_output_features = num_output_features
@@ -50,6 +51,7 @@ class NeuralFieldSuperRes(nn.Module):
         self.k_nearest = k_nearest
         self.use_gridded_knn = use_gridded_knn
         self.roll_lon = roll_lon
+        self.lat_ascending = lat_ascending
         
         # If auxiliary features exist, project them to hidden_dim
         if num_auxiliary_features > 0:
@@ -83,6 +85,7 @@ class NeuralFieldSuperRes(nn.Module):
                         k_nearest=k_nearest,
                         use_gridded_knn=use_gridded_knn,
                         roll_lon=roll_lon,
+                        lat_ascending=lat_ascending,
                     )
                 )
                 self.decoder_norms.append(nn.LayerNorm(num_hidden_features))

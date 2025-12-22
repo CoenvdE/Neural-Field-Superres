@@ -29,6 +29,7 @@ class CrossAttention(nn.Module):
         pos_init_std: float = 1.0,
         use_gridded_knn: bool = False,  # Use analytical KNN for regular grids
         roll_lon: bool = False,  # Longitude wraparound for global models
+        lat_ascending: bool = False,  # Set False for ERA5/Aurora (descending lat order)
     ) -> None:
         super().__init__()
         if k_nearest <= 0:
@@ -40,6 +41,7 @@ class CrossAttention(nn.Module):
         self.coordinate_system = coordinate_system
         self.use_gridded_knn = use_gridded_knn
         self.roll_lon = roll_lon
+        self.lat_ascending = lat_ascending
 
         if positional_information_type == "rff":
             self.pos_encoder = CoordinateEncoder( #TODO: check this logic
@@ -112,7 +114,9 @@ class CrossAttention(nn.Module):
         if self.use_gridded_knn and context_grid_shape is not None:
             # Fast analytical KNN for regular grids (returns mask for duplicates)
             knn_idx, knn_mask = self._knn_indices_gridded(
-                query_pos, context_grid_shape, k, roll_lon=self.roll_lon
+                query_pos, context_grid_shape, k, 
+                roll_lon=self.roll_lon,
+                lat_ascending=self.lat_ascending,
             )
         else:
             # Fallback to distance-based KNN (no duplicates possible)
@@ -162,6 +166,7 @@ class CrossAttention(nn.Module):
         grid_shape: torch.Tensor,
         k: int,
         roll_lon: bool = False,
+        lat_ascending: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute KNN indices analytically for regular grids (fast!).
         
@@ -173,6 +178,7 @@ class CrossAttention(nn.Module):
             grid_shape: [2] tensor with (num_lat, num_lon)
             k: Number of neighbors (should be a perfect square like 4, 9, 16, 25)
             roll_lon: If True, longitude wraps around (for global models)
+            lat_ascending: If False (default), latitudes are descending (N->S, typical for ERA5)
             
         Returns:
             knn_idx: [B, Q, k] indices into flattened context
@@ -190,7 +196,17 @@ class CrossAttention(nn.Module):
         
         # Convert normalized coords [-1, 1] to grid indices [0, num-1]
         # query_pos[:,:,0] = lat, query_pos[:,:,1] = lon
-        lat_idx = ((query_pos[..., 0] + 1) * (num_lat - 1) / 2).round().long()
+        #
+        # For ASCENDING lat (S->N):  norm=-1 -> idx=0,  norm=+1 -> idx=num-1
+        # For DESCENDING lat (N->S): norm=+1 -> idx=0,  norm=-1 -> idx=num-1 (FLIP!)
+        if lat_ascending:
+            lat_idx = ((query_pos[..., 0] + 1) * (num_lat - 1) / 2).round().long()
+        else:
+            # ERA5/Aurora: latitudes are descending (north to south)
+            # Flip the index: high normalized value -> low index
+            lat_idx = ((1 - query_pos[..., 0]) * (num_lat - 1) / 2).round().long()
+        
+        # Longitude is typically ascending (W->E), so no flip needed
         lon_idx = ((query_pos[..., 1] + 1) * (num_lon - 1) / 2).round().long()
         
         # Generate neighbor offsets (e.g., for 3x3: -1, 0, 1)
