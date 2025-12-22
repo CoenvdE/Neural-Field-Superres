@@ -62,3 +62,6 @@ wheels/
 
 ### Project Specific ###
 plots/
+
+wandb/
+checkpoints 

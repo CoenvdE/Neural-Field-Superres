@@ -1,0 +1,375 @@
+============================================================================================== 
+Warning! Mixing Conda and module environments may lead to corruption of the
+user environment. 
+We do not recommend users mixing those two environments unless absolutely
+necessary. Note that 
+SURF does not provide any support for Conda environment.
+For more information, please refer to our software policy page:
+https://servicedesk.surf.nl/wiki/display/WIKI/Software+policy+Snellius#SoftwarepolicySnellius-UseofAnacondaandMinicondaenvironmentsonSnellius 
+
+Remember that many packages have already been installed on the system and can
+be loaded using 
+the 'module load <package__name>' command. If you are uncertain if a package is
+already available 
+on the system, please use 'module avail' or 'module spider' to search for it.
+============================================================================================== 
+wandb: Starting wandb agent 🕵️
+2025-12-19 13:39:07,920 - wandb.wandb_agent - INFO - Running runs: []
+2025-12-19 13:39:08,477 - wandb.wandb_agent - INFO - Agent received command: run
+2025-12-19 13:39:08,477 - wandb.wandb_agent - INFO - Agent starting run with config:
+	model.num_decoder_layers: 1
+	model.num_heads: 8
+	model.pos_init_std: 5
+2025-12-19 13:39:08,482 - wandb.wandb_agent - INFO - About to run command: /usr/bin/env python -m src.train fit --config config/exp_static_nll.yaml --model.num_decoder_layers=1 --model.num_heads=8 --model.pos_init_std=5
+2025-12-19 13:39:13,488 - wandb.wandb_agent - INFO - Running runs: ['qqt0eyjj']
+[rank: 0] Seed set to 13
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
+wandb: Currently logged in as: coenvdelsen to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: WARNING Ignoring project 'neural-field-superres' when running a sweep.
+wandb: Tracking run with wandb version 0.23.1
+wandb: Run data is saved locally in logs/wandb/run-20251219_133924-qqt0eyjj
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run static-nll-3layer
+wandb: ⭐️ View project at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src
+wandb: 🧹 View sweep at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/sweeps/bidxxev8
+wandb: 🚀 View run at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/runs/qqt0eyjj
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/utilities/model_summary/model_summary.py:242: Precision bf16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type                              | Params | Mode  | FLOPs
+---------------------------------------------------------------------------------
+0 | model      | NeuralFieldSuperRes               | 1.8 M  | train | 0    
+1 | likelihood | HeteroscedasticGaussianLikelihood | 0      | train | 0    
+---------------------------------------------------------------------------------
+1.8 M     Trainable params
+0         Non-trainable params
+1.8 M     Total params
+7.383     Total estimated model params size (MB)
+19        Modules in train mode
+0         Modules in eval mode
+0         Total Flops
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val/loss improved. New best score: -0.441
+Metric val/loss improved by 0.418 >= min_delta = 0.0. New best score: -0.859
+Metric val/loss improved by 0.109 >= min_delta = 0.0. New best score: -0.968
+Metric val/loss improved by 0.058 >= min_delta = 0.0. New best score: -1.026
+Metric val/loss improved by 0.044 >= min_delta = 0.0. New best score: -1.070
+Metric val/loss improved by 0.054 >= min_delta = 0.0. New best score: -1.124
+Metric val/loss improved by 0.060 >= min_delta = 0.0. New best score: -1.184
+Metric val/loss improved by 0.018 >= min_delta = 0.0. New best score: -1.201
+Metric val/loss improved by 0.036 >= min_delta = 0.0. New best score: -1.237
+Metric val/loss improved by 0.014 >= min_delta = 0.0. New best score: -1.252
+Metric val/loss improved by 0.067 >= min_delta = 0.0. New best score: -1.318
+Metric val/loss improved by 0.011 >= min_delta = 0.0. New best score: -1.329
+Metric val/loss improved by 0.044 >= min_delta = 0.0. New best score: -1.374
+Metric val/loss improved by 0.017 >= min_delta = 0.0. New best score: -1.390
+Metric val/loss improved by 0.006 >= min_delta = 0.0. New best score: -1.396
+Metric val/loss improved by 0.020 >= min_delta = 0.0. New best score: -1.416
+Metric val/loss improved by 0.016 >= min_delta = 0.0. New best score: -1.432
+Metric val/loss improved by 0.002 >= min_delta = 0.0. New best score: -1.434
+Metric val/loss improved by 0.041 >= min_delta = 0.0. New best score: -1.475
+Metric val/loss improved by 0.006 >= min_delta = 0.0. New best score: -1.482
+Metric val/loss improved by 0.009 >= min_delta = 0.0. New best score: -1.491
+Metric val/loss improved by 0.018 >= min_delta = 0.0. New best score: -1.509
+Metric val/loss improved by 0.017 >= min_delta = 0.0. New best score: -1.526
+Metric val/loss improved by 0.006 >= min_delta = 0.0. New best score: -1.532
+`Trainer.fit` stopped: `max_epochs=100` reached.
+2025-12-19 14:43:37,441 - wandb.wandb_agent - INFO - Cleaning up finished run: qqt0eyjj
+2025-12-19 14:43:37,793 - wandb.wandb_agent - INFO - Agent received command: run
+2025-12-19 14:43:37,793 - wandb.wandb_agent - INFO - Agent starting run with config:
+	model.num_decoder_layers: 1
+	model.num_heads: 16
+	model.pos_init_std: 1
+2025-12-19 14:43:37,799 - wandb.wandb_agent - INFO - About to run command: /usr/bin/env python -m src.train fit --config config/exp_static_nll.yaml --model.num_decoder_layers=1 --model.num_heads=16 --model.pos_init_std=1
+2025-12-19 14:43:42,805 - wandb.wandb_agent - INFO - Running runs: ['1egl3nce']
+[rank: 0] Seed set to 13
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
+wandb: Currently logged in as: coenvdelsen to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: WARNING Ignoring project 'neural-field-superres' when running a sweep.
+wandb: Tracking run with wandb version 0.23.1
+wandb: Run data is saved locally in logs/wandb/run-20251219_144347-1egl3nce
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run static-nll-3layer
+wandb: ⭐️ View project at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src
+wandb: 🧹 View sweep at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/sweeps/bidxxev8
+wandb: 🚀 View run at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/runs/1egl3nce
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:881: Checkpoint directory /gpfs/home6/cvandenelsen/Neural-Field-Superres/checkpoints/exp_static_nll exists and is not empty.
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/utilities/model_summary/model_summary.py:242: Precision bf16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type                              | Params | Mode  | FLOPs
+---------------------------------------------------------------------------------
+0 | model      | NeuralFieldSuperRes               | 1.8 M  | train | 0    
+1 | likelihood | HeteroscedasticGaussianLikelihood | 0      | train | 0    
+---------------------------------------------------------------------------------
+1.8 M     Trainable params
+0         Non-trainable params
+1.8 M     Total params
+7.383     Total estimated model params size (MB)
+19        Modules in train mode
+0         Modules in eval mode
+0         Total Flops
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val/loss improved. New best score: -0.590
+Metric val/loss improved by 0.268 >= min_delta = 0.0. New best score: -0.858
+Metric val/loss improved by 0.175 >= min_delta = 0.0. New best score: -1.033
+Metric val/loss improved by 0.006 >= min_delta = 0.0. New best score: -1.040
+Metric val/loss improved by 0.021 >= min_delta = 0.0. New best score: -1.060
+Metric val/loss improved by 0.217 >= min_delta = 0.0. New best score: -1.277
+Metric val/loss improved by 0.040 >= min_delta = 0.0. New best score: -1.317
+Metric val/loss improved by 0.015 >= min_delta = 0.0. New best score: -1.332
+Metric val/loss improved by 0.033 >= min_delta = 0.0. New best score: -1.365
+Metric val/loss improved by 0.029 >= min_delta = 0.0. New best score: -1.394
+Metric val/loss improved by 0.015 >= min_delta = 0.0. New best score: -1.409
+Metric val/loss improved by 0.015 >= min_delta = 0.0. New best score: -1.424
+Metric val/loss improved by 0.003 >= min_delta = 0.0. New best score: -1.427
+Metric val/loss improved by 0.006 >= min_delta = 0.0. New best score: -1.433
+`Trainer.fit` stopped: `max_epochs=100` reached.
+2025-12-19 15:48:34,401 - wandb.wandb_agent - INFO - Cleaning up finished run: 1egl3nce
+2025-12-19 15:48:34,749 - wandb.wandb_agent - INFO - Agent received command: run
+2025-12-19 15:48:34,750 - wandb.wandb_agent - INFO - Agent starting run with config:
+	model.num_decoder_layers: 1
+	model.num_heads: 16
+	model.pos_init_std: 10
+2025-12-19 15:48:34,754 - wandb.wandb_agent - INFO - About to run command: /usr/bin/env python -m src.train fit --config config/exp_static_nll.yaml --model.num_decoder_layers=1 --model.num_heads=16 --model.pos_init_std=10
+2025-12-19 15:48:39,760 - wandb.wandb_agent - INFO - Running runs: ['z07kwe5j']
+[rank: 0] Seed set to 13
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
+wandb: Currently logged in as: coenvdelsen to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: WARNING Ignoring project 'neural-field-superres' when running a sweep.
+wandb: Tracking run with wandb version 0.23.1
+wandb: Run data is saved locally in logs/wandb/run-20251219_154844-z07kwe5j
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run static-nll-3layer
+wandb: ⭐️ View project at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src
+wandb: 🧹 View sweep at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/sweeps/bidxxev8
+wandb: 🚀 View run at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/runs/z07kwe5j
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:881: Checkpoint directory /gpfs/home6/cvandenelsen/Neural-Field-Superres/checkpoints/exp_static_nll exists and is not empty.
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/utilities/model_summary/model_summary.py:242: Precision bf16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type                              | Params | Mode  | FLOPs
+---------------------------------------------------------------------------------
+0 | model      | NeuralFieldSuperRes               | 1.8 M  | train | 0    
+1 | likelihood | HeteroscedasticGaussianLikelihood | 0      | train | 0    
+---------------------------------------------------------------------------------
+1.8 M     Trainable params
+0         Non-trainable params
+1.8 M     Total params
+7.383     Total estimated model params size (MB)
+19        Modules in train mode
+0         Modules in eval mode
+0         Total Flops
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val/loss improved. New best score: -0.457
+Metric val/loss improved by 0.223 >= min_delta = 0.0. New best score: -0.680
+Metric val/loss improved by 0.161 >= min_delta = 0.0. New best score: -0.841
+Metric val/loss improved by 0.187 >= min_delta = 0.0. New best score: -1.028
+Metric val/loss improved by 0.037 >= min_delta = 0.0. New best score: -1.065
+Metric val/loss improved by 0.054 >= min_delta = 0.0. New best score: -1.120
+Metric val/loss improved by 0.051 >= min_delta = 0.0. New best score: -1.171
+Metric val/loss improved by 0.004 >= min_delta = 0.0. New best score: -1.175
+Metric val/loss improved by 0.015 >= min_delta = 0.0. New best score: -1.190
+Metric val/loss improved by 0.042 >= min_delta = 0.0. New best score: -1.232
+Metric val/loss improved by 0.014 >= min_delta = 0.0. New best score: -1.246
+Metric val/loss improved by 0.065 >= min_delta = 0.0. New best score: -1.311
+Metric val/loss improved by 0.028 >= min_delta = 0.0. New best score: -1.339
+Metric val/loss improved by 0.008 >= min_delta = 0.0. New best score: -1.347
+Metric val/loss improved by 0.018 >= min_delta = 0.0. New best score: -1.365
+Metric val/loss improved by 0.040 >= min_delta = 0.0. New best score: -1.405
+Metric val/loss improved by 0.020 >= min_delta = 0.0. New best score: -1.424
+Metric val/loss improved by 0.021 >= min_delta = 0.0. New best score: -1.445
+Metric val/loss improved by 0.014 >= min_delta = 0.0. New best score: -1.459
+Metric val/loss improved by 0.007 >= min_delta = 0.0. New best score: -1.467
+Metric val/loss improved by 0.003 >= min_delta = 0.0. New best score: -1.470
+Metric val/loss improved by 0.019 >= min_delta = 0.0. New best score: -1.489
+Metric val/loss improved by 0.008 >= min_delta = 0.0. New best score: -1.497
+`Trainer.fit` stopped: `max_epochs=100` reached.
+2025-12-19 16:55:09,443 - wandb.wandb_agent - INFO - Cleaning up finished run: z07kwe5j
+2025-12-19 16:55:09,779 - wandb.wandb_agent - INFO - Agent received command: run
+2025-12-19 16:55:09,780 - wandb.wandb_agent - INFO - Agent starting run with config:
+	model.num_decoder_layers: 2
+	model.num_heads: 8
+	model.pos_init_std: 5
+2025-12-19 16:55:09,784 - wandb.wandb_agent - INFO - About to run command: /usr/bin/env python -m src.train fit --config config/exp_static_nll.yaml --model.num_decoder_layers=2 --model.num_heads=8 --model.pos_init_std=5
+2025-12-19 16:55:14,789 - wandb.wandb_agent - INFO - Running runs: ['ppghpkea']
+[rank: 0] Seed set to 13
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
+wandb: Currently logged in as: coenvdelsen to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: WARNING Ignoring project 'neural-field-superres' when running a sweep.
+wandb: Tracking run with wandb version 0.23.1
+wandb: Run data is saved locally in logs/wandb/run-20251219_165517-ppghpkea
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run static-nll-3layer
+wandb: ⭐️ View project at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src
+wandb: 🧹 View sweep at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/sweeps/bidxxev8
+wandb: 🚀 View run at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/runs/ppghpkea
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:881: Checkpoint directory /gpfs/home6/cvandenelsen/Neural-Field-Superres/checkpoints/exp_static_nll exists and is not empty.
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/utilities/model_summary/model_summary.py:242: Precision bf16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type                              | Params | Mode  | FLOPs
+---------------------------------------------------------------------------------
+0 | model      | NeuralFieldSuperRes               | 3.7 M  | train | 0    
+1 | likelihood | HeteroscedasticGaussianLikelihood | 0      | train | 0    
+---------------------------------------------------------------------------------
+3.7 M     Trainable params
+0         Non-trainable params
+3.7 M     Total params
+14.748    Total estimated model params size (MB)
+32        Modules in train mode
+0         Modules in eval mode
+0         Total Flops
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val/loss improved. New best score: -0.630
+Metric val/loss improved by 0.108 >= min_delta = 0.0. New best score: -0.738
+Metric val/loss improved by 0.374 >= min_delta = 0.0. New best score: -1.112
+Metric val/loss improved by 0.010 >= min_delta = 0.0. New best score: -1.122
+Metric val/loss improved by 0.085 >= min_delta = 0.0. New best score: -1.206
+Metric val/loss improved by 0.057 >= min_delta = 0.0. New best score: -1.264
+Metric val/loss improved by 0.090 >= min_delta = 0.0. New best score: -1.353
+Metric val/loss improved by 0.001 >= min_delta = 0.0. New best score: -1.354
+Metric val/loss improved by 0.038 >= min_delta = 0.0. New best score: -1.392
+Metric val/loss improved by 0.005 >= min_delta = 0.0. New best score: -1.398
+Metric val/loss improved by 0.006 >= min_delta = 0.0. New best score: -1.403
+Metric val/loss improved by 0.042 >= min_delta = 0.0. New best score: -1.445
+Metric val/loss improved by 0.008 >= min_delta = 0.0. New best score: -1.453
+Metric val/loss improved by 0.021 >= min_delta = 0.0. New best score: -1.474
+Metric val/loss improved by 0.015 >= min_delta = 0.0. New best score: -1.489
+Metric val/loss improved by 0.017 >= min_delta = 0.0. New best score: -1.507
+Metric val/loss improved by 0.016 >= min_delta = 0.0. New best score: -1.522
+Metric val/loss improved by 0.008 >= min_delta = 0.0. New best score: -1.530
+Metric val/loss improved by 0.004 >= min_delta = 0.0. New best score: -1.534
+Metric val/loss improved by 0.008 >= min_delta = 0.0. New best score: -1.543
+`Trainer.fit` stopped: `max_epochs=100` reached.
+2025-12-19 18:03:33,213 - wandb.wandb_agent - INFO - Cleaning up finished run: ppghpkea
+2025-12-19 18:03:33,546 - wandb.wandb_agent - INFO - Agent received command: run
+2025-12-19 18:03:33,546 - wandb.wandb_agent - INFO - Agent starting run with config:
+	model.num_decoder_layers: 2
+	model.num_heads: 8
+	model.pos_init_std: 15
+2025-12-19 18:03:33,552 - wandb.wandb_agent - INFO - About to run command: /usr/bin/env python -m src.train fit --config config/exp_static_nll.yaml --model.num_decoder_layers=2 --model.num_heads=8 --model.pos_init_std=15
+2025-12-19 18:03:38,558 - wandb.wandb_agent - INFO - Running runs: ['edfeavbc']
+[rank: 0] Seed set to 13
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
+wandb: Currently logged in as: coenvdelsen to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: WARNING Ignoring project 'neural-field-superres' when running a sweep.
+wandb: Tracking run with wandb version 0.23.1
+wandb: Run data is saved locally in logs/wandb/run-20251219_180342-edfeavbc
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run static-nll-3layer
+wandb: ⭐️ View project at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src
+wandb: 🧹 View sweep at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/sweeps/bidxxev8
+wandb: 🚀 View run at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/runs/edfeavbc
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:881: Checkpoint directory /gpfs/home6/cvandenelsen/Neural-Field-Superres/checkpoints/exp_static_nll exists and is not empty.
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/utilities/model_summary/model_summary.py:242: Precision bf16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type                              | Params | Mode  | FLOPs
+---------------------------------------------------------------------------------
+0 | model      | NeuralFieldSuperRes               | 3.7 M  | train | 0    
+1 | likelihood | HeteroscedasticGaussianLikelihood | 0      | train | 0    
+---------------------------------------------------------------------------------
+3.7 M     Trainable params
+0         Non-trainable params
+3.7 M     Total params
+14.748    Total estimated model params size (MB)
+32        Modules in train mode
+0         Modules in eval mode
+0         Total Flops
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val/loss improved. New best score: -0.697
+Metric val/loss improved by 0.180 >= min_delta = 0.0. New best score: -0.876
+Metric val/loss improved by 0.184 >= min_delta = 0.0. New best score: -1.061
+Metric val/loss improved by 0.116 >= min_delta = 0.0. New best score: -1.176
+Metric val/loss improved by 0.005 >= min_delta = 0.0. New best score: -1.182
+Metric val/loss improved by 0.002 >= min_delta = 0.0. New best score: -1.184
+Metric val/loss improved by 0.003 >= min_delta = 0.0. New best score: -1.187
+Metric val/loss improved by 0.011 >= min_delta = 0.0. New best score: -1.199
+Metric val/loss improved by 0.055 >= min_delta = 0.0. New best score: -1.253
+Metric val/loss improved by 0.015 >= min_delta = 0.0. New best score: -1.268
+Metric val/loss improved by 0.028 >= min_delta = 0.0. New best score: -1.296
+Metric val/loss improved by 0.021 >= min_delta = 0.0. New best score: -1.317
+Metric val/loss improved by 0.023 >= min_delta = 0.0. New best score: -1.339
+Metric val/loss improved by 0.000 >= min_delta = 0.0. New best score: -1.340
+Metric val/loss improved by 0.005 >= min_delta = 0.0. New best score: -1.344
+Metric val/loss improved by 0.001 >= min_delta = 0.0. New best score: -1.345
+Metric val/loss improved by 0.026 >= min_delta = 0.0. New best score: -1.371
+Metric val/loss improved by 0.021 >= min_delta = 0.0. New best score: -1.392
+Metric val/loss improved by 0.022 >= min_delta = 0.0. New best score: -1.414
+Metric val/loss improved by 0.014 >= min_delta = 0.0. New best score: -1.428
+Metric val/loss improved by 0.003 >= min_delta = 0.0. New best score: -1.432
+Metric val/loss improved by 0.003 >= min_delta = 0.0. New best score: -1.435
+Metric val/loss improved by 0.015 >= min_delta = 0.0. New best score: -1.450
+Metric val/loss improved by 0.001 >= min_delta = 0.0. New best score: -1.451
+Metric val/loss improved by 0.004 >= min_delta = 0.0. New best score: -1.455
+Metric val/loss improved by 0.023 >= min_delta = 0.0. New best score: -1.479
+Metric val/loss improved by 0.005 >= min_delta = 0.0. New best score: -1.484
+Metric val/loss improved by 0.008 >= min_delta = 0.0. New best score: -1.492
+Metric val/loss improved by 0.012 >= min_delta = 0.0. New best score: -1.504
+Monitored metric val/loss did not improve in the last 20 records. Best score: -1.504. Signaling Trainer to stop.
+2025-12-19 19:10:55,336 - wandb.wandb_agent - INFO - Cleaning up finished run: edfeavbc
+2025-12-19 19:10:55,861 - wandb.wandb_agent - INFO - Agent received command: run
+2025-12-19 19:10:55,861 - wandb.wandb_agent - INFO - Agent starting run with config:
+	model.num_decoder_layers: 2
+	model.num_heads: 16
+	model.pos_init_std: 1
+2025-12-19 19:10:55,864 - wandb.wandb_agent - INFO - About to run command: /usr/bin/env python -m src.train fit --config config/exp_static_nll.yaml --model.num_decoder_layers=2 --model.num_heads=16 --model.pos_init_std=1
+2025-12-19 19:11:00,869 - wandb.wandb_agent - INFO - Running runs: ['r1ydsfyi']
+[rank: 0] Seed set to 13
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
+wandb: Currently logged in as: coenvdelsen to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: WARNING Ignoring project 'neural-field-superres' when running a sweep.
+wandb: Tracking run with wandb version 0.23.1
+wandb: Run data is saved locally in logs/wandb/run-20251219_191104-r1ydsfyi
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run static-nll-3layer
+wandb: ⭐️ View project at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src
+wandb: 🧹 View sweep at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/sweeps/bidxxev8
+wandb: 🚀 View run at https://wandb.ai/coenvdelsen/Neural-Field-Superres-src/runs/r1ydsfyi
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:881: Checkpoint directory /gpfs/home6/cvandenelsen/Neural-Field-Superres/checkpoints/exp_static_nll exists and is not empty.
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/cvandenelsen/.local/lib/python3.11/site-packages/lightning/pytorch/utilities/model_summary/model_summary.py:242: Precision bf16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type                              | Params | Mode  | FLOPs
+---------------------------------------------------------------------------------
+0 | model      | NeuralFieldSuperRes               | 3.7 M  | train | 0    
+1 | likelihood | HeteroscedasticGaussianLikelihood | 0      | train | 0    
+---------------------------------------------------------------------------------
+3.7 M     Trainable params
+0         Non-trainable params
+3.7 M     Total params
+14.748    Total estimated model params size (MB)
+32        Modules in train mode
+0         Modules in eval mode
+0         Total Flops
+SLURM auto-requeueing enabled. Setting signal handlers.
+Metric val/loss improved. New best score: -0.174
+Metric val/loss improved by 0.402 >= min_delta = 0.0. New best score: -0.576
+Metric val/loss improved by 0.430 >= min_delta = 0.0. New best score: -1.006
+Metric val/loss improved by 0.042 >= min_delta = 0.0. New best score: -1.047
+Metric val/loss improved by 0.082 >= min_delta = 0.0. New best score: -1.129
+Metric val/loss improved by 0.061 >= min_delta = 0.0. New best score: -1.191
+Metric val/loss improved by 0.007 >= min_delta = 0.0. New best score: -1.197
+Metric val/loss improved by 0.094 >= min_delta = 0.0. New best score: -1.291
+Metric val/loss improved by 0.062 >= min_delta = 0.0. New best score: -1.353
+Metric val/loss improved by 0.038 >= min_delta = 0.0. New best score: -1.391
+[2025-12-19T19:38:59.019] error: *** JOB 17749497 ON gcn20 CANCELLED AT 2025-12-19T19:38:59 DUE TO TIME LIMIT ***
