@@ -114,21 +114,20 @@ class EraLatentHresDataset(Dataset):
         
         self._print_info()
     
-    def _open_zarr(self, zarr_path: str) -> Tuple:
+    def _open_zarr(self, zarr_path: str):
         """Open a Zarr store with v3 fallback support.
         
-        Tries xarray first. If that fails (e.g., for zarr v3 with sharding),
-        falls back to direct zarr access wrapped in an xarray-like interface.
+        Uses chunks=None to disable dask and load eagerly for faster I/O.
         
         Returns:
-            Tuple of (xarray.Dataset or ZarrDatasetWrapper, zarr.Group or None)
+            xarray.Dataset
         """
         if self.zarr_format == 3:
-            # Explicitly open as v3
-            ds = xr.open_zarr(zarr_path, consolidated=False, zarr_format=3)
+            # Explicitly open as v3, chunks=None for eager loading
+            ds = xr.open_zarr(zarr_path, consolidated=False, zarr_format=3, chunks=None)
         else:
-            # Auto-detect format
-            ds = xr.open_zarr(zarr_path, consolidated=True)
+            # Auto-detect format, chunks=None for eager loading
+            ds = xr.open_zarr(zarr_path, consolidated=True, chunks=None)
         return ds
     
     def _clip_hres_to_latent_bounds(self):
@@ -435,7 +434,7 @@ class EraLatentHresDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         time_idx = self.time_indices[idx]
         
-        # Load latents with region slicing
+        # Load latents with region slicing - single I/O call
         latent_data = self.latent_ds['surface_latents'].isel(
             time=time_idx,
             lat=self.latent_lat_indices,
@@ -444,23 +443,26 @@ class EraLatentHresDataset(Dataset):
         # Reshape from (lat, lon, channel) to (lat*lon, channel)
         latent_data = latent_data.reshape(-1, latent_data.shape[-1]).astype(np.float32)
         
-        # Load HRES targets with clipping/region slicing
-        fields = []
-        for var in self.variables:
-            data = self.hres_ds[var].isel(
-                time=time_idx,
-                latitude=self.hres_lat_indices,
-                longitude=self.hres_lon_indices,
-            ).values.flatten()
-            
-            # Apply Z-score normalization if enabled
+        # Load ALL HRES targets in a single I/O call (much faster than per-variable loop)
+        # This fetches all variables at once and stacks them
+        hres_subset = self.hres_ds[self.variables].isel(
+            time=time_idx,
+            latitude=self.hres_lat_indices,
+            longitude=self.hres_lon_indices,
+        )
+        
+        # Convert to stacked array: (variable, lat, lon) -> (lat*lon, variable)
+        # to_array() creates a new 'variable' dimension
+        hres_stacked = hres_subset.to_array(dim='variable').values  # shape: (n_vars, lat, lon)
+        n_vars = hres_stacked.shape[0]
+        query_fields = hres_stacked.reshape(n_vars, -1).T.astype(np.float32)  # shape: (lat*lon, n_vars)
+        
+        # Apply Z-score normalization for each variable
+        for i, var in enumerate(self.variables):
             if var in self.target_mean:
-                data = (data - self.target_mean[var]) / self.target_std[var]
+                query_fields[:, i] = (query_fields[:, i] - self.target_mean[var]) / self.target_std[var]
             else:
                 raise ValueError(f"Cannot normalize variable '{var}': statistics not found")
-            
-            fields.append(data)
-        query_fields = np.stack(fields, axis=-1).astype(np.float32)
         
         # Get positions
         # NOTE: copy is needed to avoid modifying the original data

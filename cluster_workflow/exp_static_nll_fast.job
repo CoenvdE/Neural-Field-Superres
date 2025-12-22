@@ -45,16 +45,16 @@ DATA_DIR="/projects/prjs1858"
 mkdir -p "$SHM_DIR"/{hres,latents,static}
 
 echo "Mounting SquashFS images..."
-squashfuse_ll "$DATA_DIR/hres_europe_2018_2020_v3.sqsh" "$MOUNT_DIR/hres"
-squashfuse_ll "$DATA_DIR/latents_europe_2018_2020_v3.sqsh" "$MOUNT_DIR/latents"
-squashfuse_ll "$DATA_DIR/static_hres_europe_v3_rechunked.sqsh" "$MOUNT_DIR/static"
+squashfuse_ll "$DATA_DIR/hres_europe_2018_2020_v3.sqsh" "$SHM_DIR/hres"
+squashfuse_ll "$DATA_DIR/latents_europe_2018_2020_v3.sqsh" "$SHM_DIR/latents"
+squashfuse_ll "$DATA_DIR/static_hres_europe_v3_rechunked.sqsh" "$SHM_DIR/static"
 
 # Cleanup function to unmount on exit
 cleanup() {
     echo "Unmounting SquashFS..."
-    fusermount -u "$MOUNT_DIR/hres"
-    fusermount -u "$MOUNT_DIR/latents"
-    fusermount -u "$MOUNT_DIR/static"
+    fusermount -u "$SHM_DIR/hres"
+    fusermount -u "$SHM_DIR/latents"
+    fusermount -u "$SHM_DIR/static"
 }
 trap cleanup EXIT
 # ==== END SquashFS ====
