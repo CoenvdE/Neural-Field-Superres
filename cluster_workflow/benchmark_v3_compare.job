@@ -1,0 +1,84 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu_a100
+#SBATCH --gpus=1
+#SBATCH --job-name=Benchmark-V3
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=12
+#SBATCH --time=01:00:00
+#SBATCH --output=cluster_workflow/slurm_outputs/benchmark_v3_%A.out
+#SBATCH --error=cluster_workflow/slurm_outputs/benchmark_v3_%A.err
+
+# Benchmark: Compare Zarr v3 normal vs v3 SquashFS dataloading speeds
+
+mkdir -p logs cluster_workflow/slurm_outputs
+
+echo "============================================================"
+echo " Benchmark Job started: $(date)"
+echo " Node: $(hostname)"
+echo " GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo "============================================================"
+
+# Load modules
+module purge
+module load 2023
+module load CUDA/12.4.0
+module load Anaconda3/2023.07-2
+
+# Activate conda environment
+source activate neural-field-superres
+
+# Navigate to project directory
+cd /home/$USER/Neural-Field-Superres
+export PYTHONPATH="."
+
+# Pull latest code
+echo "Pulling latest code..."
+git pull
+
+# ==== Mount SquashFS for faster I/O ====
+SHM_DIR="/dev/shm"
+DATA_DIR="/projects/prjs1858"
+mkdir -p "$SHM_DIR"/{hres,latents,static}
+
+echo ""
+echo "============================================================"
+echo " Mounting SquashFS images..."
+echo "============================================================"
+squashfuse_ll "$DATA_DIR/hres_europe_2018_2020_v3.sqsh" "$SHM_DIR/hres"
+squashfuse_ll "$DATA_DIR/latents_europe_2018_2020_v3.sqsh" "$SHM_DIR/latents"
+squashfuse_ll "$DATA_DIR/static_hres_europe_v3_rechunked.sqsh" "$SHM_DIR/static"
+
+echo "SquashFS mounted successfully:"
+ls -la "$SHM_DIR/hres" 2>/dev/null | head -5
+ls -la "$SHM_DIR/latents" 2>/dev/null | head -5
+ls -la "$SHM_DIR/static" 2>/dev/null | head -5
+
+# Cleanup function to unmount on exit
+cleanup() {
+    echo ""
+    echo "Unmounting SquashFS..."
+    fusermount -u "$SHM_DIR/hres" 2>/dev/null
+    fusermount -u "$SHM_DIR/latents" 2>/dev/null
+    fusermount -u "$SHM_DIR/static" 2>/dev/null
+}
+trap cleanup EXIT
+# ==== END SquashFS ====
+
+# Run benchmarks
+echo ""
+echo "============================================================"
+echo " BENCHMARK 1: Zarr v3 Normal (on GPFS) vs v3 SquashFS"
+echo "============================================================"
+python scripts/benchmark_dataload.py --mode all --storage v3_compare --n-samples 50 --n-batches 20
+
+echo ""
+echo "============================================================"
+echo " BENCHMARK 2: All formats comparison (v2, v3, squashfs)"
+echo "============================================================"
+python scripts/benchmark_dataload.py --mode all --storage all_formats --n-samples 50 --n-batches 20
+
+echo ""
+echo "============================================================"
+echo " Benchmark completed: $(date)"
+echo "============================================================"

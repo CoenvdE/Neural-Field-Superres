@@ -28,8 +28,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # CONFIGURATION - Modify these paths for your setup
 # =============================================================================
 
-# Normal storage (Zarr v2)
-NORMAL_CONFIG = {
+# Normal v2 storage (Zarr v2 on GPFS)
+NORMAL_V2_CONFIG = {
+    "name": "NORMAL_V2",
     "latent_zarr_path": "/projects/prjs1858/latents_europe_2018_2020.zarr",
     "hres_zarr_path": "/projects/prjs1858/hres_europe_2018.zarr",
     "static_zarr_path": "/projects/prjs1858/static_hres_europe.zarr",
@@ -38,8 +39,20 @@ NORMAL_CONFIG = {
     "zarr_format": None,  # auto-detect (v2)
 }
 
-# SquashFS storage (mounted)
-SQUASHFS_CONFIG = {
+# Normal v3 storage (Zarr v3 on GPFS - no squashfs)
+NORMAL_V3_CONFIG = {
+    "name": "NORMAL_V3",
+    "latent_zarr_path": "/projects/prjs1858/latents_europe_2018_2020_v3.zarr",
+    "hres_zarr_path": "/projects/prjs1858/hres_europe_2018_2020_v3.zarr",
+    "static_zarr_path": "/projects/prjs1858/static_hres_europe_v3_rechunked.zarr",
+    "statistics_path": "/projects/prjs1858/hres_europe_2018_statistics.json",
+    "static_statistics_path": "/projects/prjs1858/static_hres_europe_statistics.json",
+    "zarr_format": 3,
+}
+
+# SquashFS v3 storage (mounted from .sqsh files)
+SQUASHFS_V3_CONFIG = {
+    "name": "SQUASHFS_V3",
     "latent_zarr_path": "/dev/shm/latents",  # Mounted squashfs
     "hres_zarr_path": "/dev/shm/hres",
     "static_zarr_path": "/dev/shm/static",
@@ -47,6 +60,10 @@ SQUASHFS_CONFIG = {
     "static_statistics_path": "/projects/prjs1858/static_hres_europe_statistics.json",
     "zarr_format": 3,  # v3 format
 }
+
+# Alias for backwards compatibility
+NORMAL_CONFIG = NORMAL_V2_CONFIG
+SQUASHFS_CONFIG = SQUASHFS_V3_CONFIG
 
 # Dataset common config
 DATASET_CONFIG = {
@@ -332,8 +349,8 @@ def main():
     parser = argparse.ArgumentParser(description="Benchmark dataloading speed")
     parser.add_argument("--mode", choices=["zarr", "dataset", "dataloader", "all"], 
                         default="all", help="Benchmark mode")
-    parser.add_argument("--storage", choices=["normal", "squashfs", "both"],
-                        default="normal", help="Storage type to benchmark")
+    parser.add_argument("--storage", choices=["normal", "squashfs", "both", "v3_compare", "all_formats"],
+                        default="normal", help="Storage type to benchmark (v3_compare = v3 normal vs v3 squashfs)")
     parser.add_argument("--n-samples", type=int, default=50, 
                         help="Number of samples to benchmark")
     parser.add_argument("--n-batches", type=int, default=20,
@@ -342,15 +359,26 @@ def main():
                         help="Batch size for dataloader benchmark")
     args = parser.parse_args()
     
+    # Build storage configs based on args
     storage_configs = []
-    if args.storage in ["normal", "both"]:
-        storage_configs.append(("NORMAL", NORMAL_CONFIG))
-    if args.storage in ["squashfs", "both"]:
-        storage_configs.append(("SQUASHFS", SQUASHFS_CONFIG))
+    if args.storage == "normal" or args.storage == "both":
+        storage_configs.append(NORMAL_V2_CONFIG)
+    if args.storage == "squashfs" or args.storage == "both":
+        storage_configs.append(SQUASHFS_V3_CONFIG)
+    if args.storage == "v3_compare":
+        # Compare v3 normal vs v3 squashfs
+        storage_configs.append(NORMAL_V3_CONFIG)
+        storage_configs.append(SQUASHFS_V3_CONFIG)
+    if args.storage == "all_formats":
+        # Test all three formats
+        storage_configs.append(NORMAL_V2_CONFIG)
+        storage_configs.append(NORMAL_V3_CONFIG)
+        storage_configs.append(SQUASHFS_V3_CONFIG)
     
     all_results = {}
     
-    for storage_name, config in storage_configs:
+    for config in storage_configs:
+        storage_name = config.get("name", "UNKNOWN")
         print("\n" + "#" * 70)
         print(f"# STORAGE: {storage_name}")
         print("#" * 70)
